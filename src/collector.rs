@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::io::BufRead;
@@ -100,14 +100,25 @@ pub fn collect_all(log_dir: &Path) -> Result<usize> {
 
 fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
     let home = home_dir();
+    let today = Local::now().date_naive();
+    let trivial: HashSet<&str> =
+        ["ls", "cd", "clear", "pwd", "exit", "history", "ll", "la", "l"]
+            .into_iter()
+            .collect();
     let mut commands: Vec<String> = Vec::new();
 
-    // Bash — lê incrementalmente via marker
+    // Bash — usa timestamps do HISTTIMEFORMAT para filtrar por data
     let bash_hist = home.join(".bash_history");
     if bash_hist.exists() {
         let marker = log_dir.join(".last_bash_pos");
-        let new_cmds = read_incremental(&bash_hist, &marker, 100)?;
-        commands.extend(new_cmds);
+        let raw = read_incremental(&bash_hist, &marker, 400)?;
+        for cmd in filter_by_date(raw, today) {
+            let trimmed = cmd.trim();
+            let first = trimmed.split_whitespace().next().unwrap_or("");
+            if !first.is_empty() && !trivial.contains(first) {
+                commands.push(trimmed.to_string());
+            }
+        }
     }
 
     // Zsh — formato `: timestamp:0;comando`
@@ -116,13 +127,32 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
         let marker = log_dir.join(".last_zsh_pos");
         let raw = read_incremental(&zsh_hist, &marker, 100)?;
         for line in raw {
-            let cmd = line
-                .splitn(2, ';')
-                .nth(1)
-                .unwrap_or(&line)
-                .to_string();
-            if !cmd.is_empty() {
-                commands.push(cmd);
+            // ": 1780520426:0;git status"
+            let (ts_secs, cmd) = if let Some(rest) = line.strip_prefix(": ") {
+                let mut parts = rest.splitn(2, ';');
+                let meta = parts.next().unwrap_or("");
+                let cmd = parts.next().unwrap_or("").to_string();
+                let secs = meta.splitn(2, ':').next().unwrap_or("").trim().to_string();
+                (secs, cmd)
+            } else {
+                (String::new(), line.splitn(2, ';').nth(1).unwrap_or(&line).to_string())
+            };
+
+            if cmd.is_empty() { continue; }
+
+            if !ts_secs.is_empty() {
+                if let Ok(secs) = ts_secs.parse::<i64>() {
+                    let cmd_date = chrono::DateTime::from_timestamp(secs, 0)
+                        .map(|dt| dt.date_naive());
+                    if cmd_date.map(|d| d != today).unwrap_or(false) {
+                        continue;
+                    }
+                }
+            }
+
+            let first = cmd.trim().split_whitespace().next().unwrap_or("");
+            if !first.is_empty() && !trivial.contains(first) {
+                commands.push(cmd.trim().to_string());
             }
         }
     }
@@ -134,35 +164,45 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
         let raw = read_incremental(&fish_hist, &marker, 200)?;
         for line in raw {
             if let Some(cmd) = line.strip_prefix("- cmd: ") {
-                commands.push(cmd.to_string());
+                let first = cmd.trim().split_whitespace().next().unwrap_or("");
+                if !first.is_empty() && !trivial.contains(first) {
+                    commands.push(cmd.trim().to_string());
+                }
             }
         }
     }
-
-    // Filtrar timestamps do bash HISTTIMEFORMAT (#1780520382) e comandos triviais
-    let trivial: HashSet<&str> =
-        ["ls", "cd", "clear", "pwd", "exit", "history", "ll", "la", "l"]
-            .into_iter()
-            .collect();
-
-    commands.retain(|c| {
-        let trimmed = c.trim();
-        // Linha de timestamp do HISTTIMEFORMAT: "#" seguido só de dígitos
-        if trimmed.starts_with('#') && trimmed[1..].chars().all(|ch| ch.is_ascii_digit()) {
-            return false;
-        }
-        // Só dígitos soltos (artefato de parse)
-        if trimmed.chars().all(|ch| ch.is_ascii_digit()) {
-            return false;
-        }
-        let first = trimmed.split_whitespace().next().unwrap_or("");
-        !first.is_empty() && !trivial.contains(first)
-    });
 
     Ok(Entry::Shell {
         ts: ts.to_string(),
         commands,
     })
+}
+
+/// Itera sobre linhas de bash history com HISTTIMEFORMAT, retornando apenas
+/// os comandos cujo timestamp corresponde à `date` alvo.
+/// Remove os marcadores `#digits` e bare-digits do output.
+fn filter_by_date(raw: Vec<String>, date: NaiveDate) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut current_date: Option<NaiveDate> = None;
+
+    for line in raw {
+        let trimmed = line.trim();
+        if trimmed.is_empty() { continue; }
+
+        let inner = trimmed.strip_prefix('#').unwrap_or(trimmed);
+        if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit()) {
+            if let Ok(secs) = inner.parse::<i64>() {
+                current_date = chrono::DateTime::from_timestamp(secs, 0)
+                    .map(|dt| dt.date_naive());
+            }
+            continue;
+        }
+
+        if current_date.map(|d| d == date).unwrap_or(false) {
+            result.push(trimmed.to_string());
+        }
+    }
+    result
 }
 
 /// Lê novas linhas de um arquivo desde a última posição salva no marker.
@@ -422,6 +462,7 @@ fn read_chrome_history_db() -> Result<Vec<TabInfo>> {
 
 fn capture_git_context(ts: &str) -> Result<Entry> {
     let home = home_dir();
+    let today = Local::now().date_naive();
     let mut repos: Vec<GitRepoInfo> = Vec::new();
 
     // find -maxdepth 4 -name .git
@@ -443,7 +484,12 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
                 .output()
             {
                 let msg = String::from_utf8_lossy(&log_out.stdout).trim().to_string();
-                if !msg.is_empty() {
+                if msg.is_empty() { continue; }
+
+                // Só inclui repos com commit de hoje: "YYYY-MM-DD HH:MM:SS ..."
+                let commit_date = msg.get(..10)
+                    .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+                if commit_date.map(|d| d == today).unwrap_or(false) {
                     repos.push(GitRepoInfo {
                         repo: repo_dir.to_string(),
                         last_commit: msg,
@@ -461,6 +507,102 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
         ts: ts.to_string(),
         data: ContextData { git_repos: repos },
     })
+}
+
+// ─── Limpeza de logs existentes ─────────────────
+
+/// Reprocessa todos os arquivos JSONL no diretório, removendo entradas fora da data do arquivo.
+/// Retorna o número de entradas removidas no total.
+pub fn clean_all_logs(log_dir: &Path) -> Result<usize> {
+    let mut total_removed = 0;
+
+    let entries = match std::fs::read_dir(log_dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(0),
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let date = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+
+        if let Some(date) = date {
+            total_removed += clean_log_file(&path, date)?;
+        }
+    }
+
+    Ok(total_removed)
+}
+
+fn clean_log_file(path: &Path, date: NaiveDate) -> Result<usize> {
+    let content = std::fs::read_to_string(path)?;
+    let mut out_lines: Vec<String> = Vec::new();
+    let mut removed = 0;
+
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let mut val: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => { out_lines.push(line.to_string()); continue; }
+        };
+
+        match val.get("type").and_then(|t| t.as_str()) {
+            Some("shell") => {
+                if let Some(cmds) = val["commands"].as_array().cloned() {
+                    // Reutiliza filter_by_date: converte Value → String, filtra, converte de volta
+                    let raw: Vec<String> = cmds.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                    let before = raw.len();
+                    let kept = filter_by_date(raw, date);
+                    removed += before.saturating_sub(kept.len());
+
+                    if kept.is_empty() {
+                        removed += 1;
+                        continue;
+                    }
+                    val["commands"] = serde_json::json!(kept);
+                }
+            }
+            Some("context") => {
+                if let Some(repos) = val["data"]["git_repos"].as_array().cloned() {
+                    let kept: Vec<serde_json::Value> = repos.into_iter().filter(|r| {
+                        let commit = r["last_commit"].as_str().unwrap_or("");
+                        commit.get(..10)
+                            .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+                            .map(|d| d == date)
+                            .unwrap_or(false)
+                    }).collect();
+
+                    let removed_here = val["data"]["git_repos"].as_array()
+                        .map(|a| a.len())
+                        .unwrap_or(0)
+                        .saturating_sub(kept.len());
+                    removed += removed_here;
+
+                    if kept.is_empty() {
+                        removed += 1;
+                        continue;
+                    }
+                    val["data"]["git_repos"] = serde_json::json!(kept);
+                }
+            }
+            _ => {}
+        }
+
+        out_lines.push(serde_json::to_string(&val)?);
+    }
+
+    let new_content = out_lines.join("\n") + if out_lines.is_empty() { "" } else { "\n" };
+    std::fs::write(path, new_content)?;
+    Ok(removed)
 }
 
 // ─── Helpers ────────────────────────────────────

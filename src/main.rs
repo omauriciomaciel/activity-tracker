@@ -64,6 +64,9 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Remove entradas fora da data de cada arquivo de log
+    CleanLogs,
+
     /// Gerencia configurações persistentes
     Config {
         #[command(subcommand)]
@@ -114,6 +117,12 @@ async fn main() -> Result<()> {
             let log_dir = config::log_dir();
             let entry_count = collector::collect_all(&log_dir)?;
             println!("Coleta concluída — {entry_count} entradas salvas");
+        }
+
+        Commands::CleanLogs => {
+            let log_dir = config::log_dir();
+            let removed = collector::clean_all_logs(&log_dir)?;
+            println!("Logs limpos — {removed} entradas removidas");
         }
 
         Commands::Summary {
