@@ -2,6 +2,7 @@ mod collector;
 mod config;
 mod daemon;
 mod summarizer;
+mod updater;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -67,6 +68,9 @@ enum Commands {
     /// Remove entradas fora da data de cada arquivo de log
     CleanLogs,
 
+    /// Atualiza o binário via git pull + cargo build
+    Update,
+
     /// Gerencia configurações persistentes
     Config {
         #[command(subcommand)]
@@ -123,6 +127,10 @@ async fn main() -> Result<()> {
             let log_dir = config::log_dir();
             let removed = collector::clean_all_logs(&log_dir)?;
             println!("Logs limpos — {removed} entradas removidas");
+        }
+
+        Commands::Update => {
+            updater::run()?;
         }
 
         Commands::Summary {
