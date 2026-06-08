@@ -1,5 +1,7 @@
 use crate::config;
 use anyhow::{Context, Result};
+use colored::Colorize;
+use termimad::MadSkin;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::BufRead;
@@ -99,29 +101,31 @@ pub async fn run(
     };
 
     if files.is_empty() {
-        println!("Aviso: Nenhum log nos últimos {days} dias.");
-        println!("   Rode primeiro: activity-tracker start");
-        println!("   Ou coleta manual: activity-tracker collect");
+        println!("{} Nenhum log nos últimos {days} dias.", "Aviso:".yellow().bold());
+        println!("   Rode primeiro: {}", "activity-tracker start".cyan());
+        println!("   Ou coleta manual: {}", "activity-tracker collect".cyan());
         return Ok(());
     }
-    println!("{} arquivo(s) de log encontrados", files.len());
+    println!("{} arquivo(s) de log encontrados", files.len().to_string().cyan());
 
     let data = aggregate(&files)?;
     let context = build_context(&data);
 
     if verbose {
-        println!("\n--- Contexto enviado ao Ollama ---\n{context}\n---\n");
+        println!("\n{}\n{context}\n{}\n", "--- Contexto enviado ao Ollama ---".dimmed(), "---".dimmed());
     }
 
-    println!("Enviando para Ollama (modelo: {model})...\n");
+    println!("{}", format!("Enviando para Ollama (modelo: {model})...").dimmed());
     let summary = call_ollama(ollama_url, model, &context, lang).await?;
 
-    println!("-----------------------------------------------");
-    println!("  RESUMO DE ATIVIDADES — {label}");
-    println!("  Modelo: {model}");
-    println!("-----------------------------------------------\n");
-    println!("{summary}");
-    println!("\n-----------------------------------------------");
+    let border = "━".repeat(47);
+    println!("\n{}", border.cyan());
+    println!("  {}  {}", "RESUMO DE ATIVIDADES".bold().white(), format!("— {label}").cyan());
+    println!("  {}", format!("Modelo: {model}").dimmed());
+    println!("{}\n", border.cyan());
+    let skin = MadSkin::default();
+    skin.print_text(&summary);
+    println!("\n{}", border.cyan());
 
     Ok(())
 }

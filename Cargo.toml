@@ -16,3 +16,5 @@ dirs = "5"
 rusqlite = { version = "0.31", features = ["bundled"] }
 toml = "0.8"
 glob = "0.3"
+colored = "2"
+termimad = "0.23"
