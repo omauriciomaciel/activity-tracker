@@ -67,14 +67,56 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo "  sudo cp $SRC /usr/local/bin/$BINARY"
 fi
 
+# ── Autostart via systemd (inicia automaticamente no login) ──────────────────
+
+if command -v systemctl &>/dev/null; then
+    echo
+    echo "Configurando autostart via systemd..."
+
+    SYSTEMD_DIR="$HOME/.config/systemd/user"
+    SERVICE_FILE="$SYSTEMD_DIR/activity-tracker.service"
+    mkdir -p "$SYSTEMD_DIR"
+
+    cat > "$SERVICE_FILE" << EOF
+[Unit]
+Description=Activity Tracker daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=$INSTALL_DIR/$BINARY start --foreground
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+EOF
+
+    systemctl --user daemon-reload
+    systemctl --user enable activity-tracker.service
+    systemctl --user start activity-tracker.service || warn "Falha ao iniciar o serviço agora (será iniciado no próximo login)"
+
+    info "Serviço systemd ativado — inicia automaticamente no login"
+    info "  Status: systemctl --user status activity-tracker"
+    info "  Logs:   journalctl --user -u activity-tracker -f"
+else
+    warn "systemctl não encontrado — autostart não configurado."
+    warn "Inicie manualmente com: $BINARY start"
+fi
+
 # ── Próximos passos ──────────────────────────────────────────────────────────
 
 echo
 echo "=== Instalação concluída ==="
 echo
-echo "Próximos passos:"
+echo "Comandos:"
+echo "  $BINARY start                       # inicia daemon em background"
+echo "  $BINARY stop                        # para o daemon"
+echo "  $BINARY status                      # verifica se está rodando"
 echo "  $BINARY collect                     # coleta manual"
-echo "  $BINARY start                       # daemon (coleta a cada 5 min)"
 echo "  $BINARY summary --days 3            # resumo dos últimos 3 dias"
 echo "  $BINARY config set-model llama3.2   # define modelo padrão"
 echo

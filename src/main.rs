@@ -17,12 +17,22 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Inicia o daemon que coleta atividades em background
+    /// Inicia o daemon em background (ou em primeiro plano com --foreground)
     Start {
         /// Intervalo de coleta em minutos
         #[arg(short, long, default_value = "5")]
         interval: u64,
+
+        /// Mantém processo em primeiro plano (usado pelo systemd)
+        #[arg(long)]
+        foreground: bool,
     },
+
+    /// Para o daemon em background
+    Stop,
+
+    /// Mostra status do daemon
+    Status,
 
     /// Executa uma única coleta manual
     Collect,
@@ -88,8 +98,16 @@ async fn main() -> Result<()> {
     let mut cfg = config::Config::load()?;
 
     match cli.command {
-        Commands::Start { interval } => {
-            daemon::run(interval).await?;
+        Commands::Start { interval, foreground } => {
+            daemon::run(interval, foreground).await?;
+        }
+
+        Commands::Stop => {
+            daemon::stop()?;
+        }
+
+        Commands::Status => {
+            daemon::status()?;
         }
 
         Commands::Collect => {
