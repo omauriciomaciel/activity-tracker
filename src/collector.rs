@@ -93,6 +93,8 @@ pub fn collect_all(log_dir: &Path) -> Result<usize> {
         writeln!(file, "{json}")?;
     }
 
+    clean_all_logs(log_dir)?;
+
     Ok(count)
 }
 

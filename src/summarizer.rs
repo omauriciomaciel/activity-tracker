@@ -185,12 +185,13 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
     let mut dates: Vec<String> = Vec::new();
 
     for file in files {
-        let date = file
+        let date_str = file
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("?")
             .to_string();
-        dates.push(date);
+        let file_date = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").ok();
+        dates.push(date_str);
 
         let f = std::fs::File::open(file)?;
         for line in std::io::BufReader::new(f).lines() {
@@ -229,7 +230,14 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
                 }
                 Ok(LogEntry::Context { data }) => {
                     for r in data.git_repos {
-                        // Mantém apenas a primeira entrada por repo (mais recente no JSONL)
+                        // Filtra repos cujo commit não pertence à data do arquivo
+                        if let Some(file_date) = file_date {
+                            let commit_date = r.last_commit.get(..10)
+                                .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+                            if commit_date.map(|d| d != file_date).unwrap_or(false) {
+                                continue;
+                            }
+                        }
                         repo_map.entry(r.repo).or_insert(r.last_commit);
                     }
                 }
