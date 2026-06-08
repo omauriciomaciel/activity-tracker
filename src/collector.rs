@@ -180,8 +180,22 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
 
 /// Itera sobre linhas de bash history com HISTTIMEFORMAT, retornando apenas
 /// os comandos cujo timestamp corresponde à `date` alvo.
-/// Remove os marcadores `#digits` e bare-digits do output.
+/// Se não houver nenhum marcador de timestamp no lote, retorna todos os comandos
+/// (o read_incremental já garante que são linhas novas desde a última coleta).
 fn filter_by_date(raw: Vec<String>, date: NaiveDate) -> Vec<String> {
+    let has_timestamps = raw.iter().any(|line| {
+        let inner = line.trim().strip_prefix('#').unwrap_or(line.trim());
+        !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit())
+    });
+
+    if !has_timestamps {
+        return raw
+            .into_iter()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+    }
+
     let mut result = Vec::new();
     let mut current_date: Option<NaiveDate> = None;
 
