@@ -38,6 +38,9 @@ activity-tracker summary --model mistral
 activity-tracker summary --lang en
 activity-tracker summary --verbose      # exibe dados brutos antes do resumo
 
+# Resumo de uma data específica (formato YYYY-DD-MM)
+activity-tracker summary --date 2026-06-06
+
 # Configuração persistente
 activity-tracker config set-model llama3.1
 activity-tracker config set-url http://localhost:11434

@@ -63,11 +63,31 @@ struct OllamaResp {
 
 // ─── Lógica principal ───────────────────────────
 
-pub async fn run(days: u32, model: &str, ollama_url: &str, lang: &str, verbose: bool) -> Result<()> {
+pub async fn run(
+    days: u32,
+    date: Option<&str>,
+    model: &str,
+    ollama_url: &str,
+    lang: &str,
+    verbose: bool,
+) -> Result<()> {
     let log_dir = config::log_dir();
 
     // 1. Encontrar arquivos
-    let files = find_log_files(&log_dir, days);
+    let (files, label) = if let Some(raw) = date {
+        let parsed = parse_date(raw)?;
+        let path = log_dir.join(format!("{}.jsonl", parsed.format("%Y-%m-%d")));
+        if !path.exists() {
+            println!("⚠️  Nenhum log encontrado para {raw}.");
+            println!("   Verifique o formato: YYYY-DD-MM  (ex: 2026-08-06)");
+            return Ok(());
+        }
+        (vec![path], format!("{raw}"))
+    } else {
+        let files = find_log_files(&log_dir, days);
+        (files, format!("últimos {days} dia(s)"))
+    };
+
     if files.is_empty() {
         println!("⚠️  Nenhum log nos últimos {days} dias.");
         println!("   Rode primeiro: activity-tracker start");
@@ -88,13 +108,19 @@ pub async fn run(days: u32, model: &str, ollama_url: &str, lang: &str, verbose: 
     let summary = call_ollama(ollama_url, model, &data, lang).await?;
 
     println!("═══════════════════════════════════════════════");
-    println!("  📋 RESUMO DE ATIVIDADES — últimos {days} dia(s)");
+    println!("  📋 RESUMO DE ATIVIDADES — {label}");
     println!("  🧠 Modelo: {model}");
     println!("═══════════════════════════════════════════════\n");
     println!("{summary}");
     println!("\n═══════════════════════════════════════════════");
 
     Ok(())
+}
+
+/// Parseia entrada no formato YYYY-DD-MM para NaiveDate.
+fn parse_date(s: &str) -> Result<chrono::NaiveDate> {
+    chrono::NaiveDate::parse_from_str(s, "%Y-%d-%m")
+        .with_context(|| format!("Data inválida: '{s}'. Use o formato YYYY-DD-MM (ex: 2026-08-06)"))
 }
 
 fn find_log_files(log_dir: &std::path::Path, days: u32) -> Vec<PathBuf> {

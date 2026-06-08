@@ -29,9 +29,13 @@ enum Commands {
 
     /// Gera um resumo das atividades recentes via Ollama
     Summary {
-        /// Quantos dias para trás resumir
+        /// Quantos dias para trás resumir (ignorado se --date for usado)
         #[arg(short, long, default_value = "3")]
         days: u32,
+
+        /// Data específica no formato YYYY-DD-MM (ex: 2026-08-06)
+        #[arg(long)]
+        date: Option<String>,
 
         /// Modelo do Ollama (sobrescreve o padrão salvo)
         #[arg(short, long)]
@@ -96,6 +100,7 @@ async fn main() -> Result<()> {
 
         Commands::Summary {
             days,
+            date,
             model,
             ollama_url,
             lang,
@@ -105,7 +110,7 @@ async fn main() -> Result<()> {
             let url = ollama_url.unwrap_or_else(|| cfg.ollama_url.clone());
             let lang = lang.unwrap_or_else(|| cfg.lang.clone());
 
-            summarizer::run(days, &model, &url, &lang, verbose).await?;
+            summarizer::run(days, date.as_deref(), &model, &url, &lang, verbose).await?;
         }
 
         Commands::Config { action } => match action {
