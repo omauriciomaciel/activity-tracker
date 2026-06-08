@@ -1,7 +1,7 @@
 [package]
 name = "activity-tracker"
 version = "0.2.0"
-edition = "2021"
+edition = "2024"
 description = "Captura atividades do sistema e resume com Ollama"
 
 [dependencies]
