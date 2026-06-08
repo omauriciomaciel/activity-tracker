@@ -194,11 +194,13 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
         dates.push(date_str);
 
         let f = std::fs::File::open(file)?;
-        for line in std::io::BufReader::new(f).lines() {
-            let line = match line {
-                Ok(l) if !l.trim().is_empty() => l,
-                _ => continue,
-            };
+        let lines: Vec<String> = std::io::BufReader::new(f)
+            .lines()
+            .filter_map(|l| l.ok())
+            .filter(|l| !l.trim().is_empty())
+            .collect();
+        for line in lines.iter().rev() {
+            let line = line.as_str();
 
             match serde_json::from_str::<LogEntry>(&line) {
                 Ok(LogEntry::Shell { commands: cmds }) => {
@@ -293,11 +295,22 @@ fn build_context(data: &ActivityData) -> String {
 
     if !data.tabs.is_empty() {
         out.push_str("=== SITES VISITADOS ===\n");
+        let mut title_counts: Vec<(String, usize)> = Vec::new();
+        let mut seen_titles: HashMap<String, usize> = HashMap::new();
         for (title, url) in &data.tabs {
-            if title.is_empty() || title == url {
-                out.push_str(&format!("  {url}\n"));
+            let label = if title.is_empty() || title == url { url.clone() } else { title.clone() };
+            if let Some(idx) = seen_titles.get(&label) {
+                title_counts[*idx].1 += 1;
             } else {
-                out.push_str(&format!("  {title}\n"));
+                seen_titles.insert(label.clone(), title_counts.len());
+                title_counts.push((label, 1));
+            }
+        }
+        for (label, count) in &title_counts {
+            if *count > 1 {
+                out.push_str(&format!("  {label} ({count}x)\n"));
+            } else {
+                out.push_str(&format!("  {label}\n"));
             }
         }
         out.push('\n');
