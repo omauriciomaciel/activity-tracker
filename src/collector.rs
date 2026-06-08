@@ -139,14 +139,23 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
         }
     }
 
-    // Filtrar comandos triviais
+    // Filtrar timestamps do bash HISTTIMEFORMAT (#1780520382) e comandos triviais
     let trivial: HashSet<&str> =
         ["ls", "cd", "clear", "pwd", "exit", "history", "ll", "la", "l"]
             .into_iter()
             .collect();
 
     commands.retain(|c| {
-        let first = c.split_whitespace().next().unwrap_or("");
+        let trimmed = c.trim();
+        // Linha de timestamp do HISTTIMEFORMAT: "#" seguido só de dígitos
+        if trimmed.starts_with('#') && trimmed[1..].chars().all(|ch| ch.is_ascii_digit()) {
+            return false;
+        }
+        // Só dígitos soltos (artefato de parse)
+        if trimmed.chars().all(|ch| ch.is_ascii_digit()) {
+            return false;
+        }
+        let first = trimmed.split_whitespace().next().unwrap_or("");
         !first.is_empty() && !trivial.contains(first)
     });
 
@@ -204,7 +213,15 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
                 // Formato: 0x... desktop_num host título_da_janela
                 let parts: Vec<&str> = line.splitn(4, char::is_whitespace).collect();
                 if parts.len() >= 4 {
-                    let title = parts[3..].join(" ").trim().to_string();
+                    let raw_title = parts[3..].join(" ");
+                    // Remover prefixo de hostname que wmctrl inclui
+                    let hostname = parts[2]; // 3ª coluna é o hostname
+                    let title = raw_title
+                        .trim()
+                        .strip_prefix(hostname)
+                        .unwrap_or(raw_title.trim())
+                        .trim()
+                        .to_string();
                     if !title.is_empty() {
                         windows.push(title);
                     }

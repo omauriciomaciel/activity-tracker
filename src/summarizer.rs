@@ -40,6 +40,16 @@ struct GitEntry {
     last_commit: String,
 }
 
+// ─── Dados agregados ─────────────────────────────
+
+struct ActivityData {
+    dates: Vec<String>,
+    commands: Vec<String>,
+    top_apps: Vec<(String, u32)>,
+    tabs: Vec<(String, String)>, // (title, url)
+    repos: Vec<(String, String)>, // (path, last_commit)
+}
+
 // ─── Ollama ─────────────────────────────────────
 
 #[derive(Serialize)]
@@ -73,7 +83,6 @@ pub async fn run(
 ) -> Result<()> {
     let log_dir = config::log_dir();
 
-    // 1. Encontrar arquivos
     let (files, label) = if let Some(raw) = date {
         let parsed = parse_date(raw)?;
         let path = log_dir.join(format!("{}.jsonl", parsed.format("%Y-%m-%d")));
@@ -96,16 +105,15 @@ pub async fn run(
     }
     println!("{} arquivo(s) de log encontrados", files.len());
 
-    // 2. Agregar
-    let data = aggregate(&files, verbose)?;
+    let data = aggregate(&files)?;
+    let context = build_context(&data);
+
     if verbose {
-        println!("\nDados agregados:");
-        println!("{}", serde_json::to_string_pretty(&data)?);
+        println!("\n--- Contexto enviado ao Ollama ---\n{context}\n---\n");
     }
 
-    // 3. Chamar Ollama
     println!("Enviando para Ollama (modelo: {model})...\n");
-    let summary = call_ollama(ollama_url, model, &data, lang).await?;
+    let summary = call_ollama(ollama_url, model, &context, lang).await?;
 
     println!("-----------------------------------------------");
     println!("  RESUMO DE ATIVIDADES — {label}");
@@ -117,7 +125,6 @@ pub async fn run(
     Ok(())
 }
 
-/// Parseia entrada no formato YYYY-DD-MM para NaiveDate.
 fn parse_date(s: &str) -> Result<chrono::NaiveDate> {
     chrono::NaiveDate::parse_from_str(s, "%Y-%d-%m")
         .with_context(|| format!("Data inválida: '{s}'. Use o formato YYYY-DD-MM (ex: 2026-08-06)"))
@@ -134,11 +141,42 @@ fn find_log_files(log_dir: &std::path::Path, days: u32) -> Vec<PathBuf> {
         .collect()
 }
 
-fn aggregate(files: &[PathBuf], verbose: bool) -> Result<serde_json::Value> {
-    let mut all_commands: Vec<String> = Vec::new();
+fn is_noise_command(cmd: &str) -> bool {
+    // Timestamps do HISTTIMEFORMAT: "#digits" ou só dígitos
+    let t = cmd.trim();
+    let inner = t.strip_prefix('#').unwrap_or(t);
+    if inner.chars().all(|c| c.is_ascii_digit()) && !inner.is_empty() {
+        return true;
+    }
+    // Comandos triviais
+    let first = t.split_whitespace().next().unwrap_or("");
+    matches!(first, "ls" | "cd" | "clear" | "pwd" | "exit" | "history" | "ll" | "la" | "l")
+}
+
+fn strip_hostname_prefix(s: &str) -> &str {
+    // wmctrl prefixa títulos com o hostname: "hostname título da janela"
+    // Detecta se começa com palavra(s) com hífen (padrão de hostname Linux) seguida de espaço
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'-') {
+        i += 1;
+    }
+    // Só descarta o prefixo se for longo o suficiente para ser um hostname (>5 chars) e seguido de espaço
+    if i > 5 && i < s.len() && bytes[i] == b' ' {
+        s[i + 1..].trim()
+    } else {
+        s
+    }
+}
+
+fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
+    let mut seen_commands: HashSet<String> = HashSet::new();
+    let mut commands: Vec<String> = Vec::new();
     let mut app_counts: HashMap<String, u32> = HashMap::new();
-    let mut tabs: Vec<serde_json::Value> = Vec::new();
-    let mut repos: Vec<serde_json::Value> = Vec::new();
+    let mut seen_urls: HashSet<String> = HashSet::new();
+    let mut tabs: Vec<(String, String)> = Vec::new();
+    // Dedup repos por path, mantendo o commit mais recente (primeiro encontrado = mais recente no JSONL)
+    let mut repo_map: HashMap<String, String> = HashMap::new();
     let mut dates: Vec<String> = Vec::new();
 
     for file in files {
@@ -157,12 +195,20 @@ fn aggregate(files: &[PathBuf], verbose: bool) -> Result<serde_json::Value> {
             };
 
             match serde_json::from_str::<LogEntry>(&line) {
-                Ok(LogEntry::Shell { commands }) => {
-                    all_commands.extend(commands);
+                Ok(LogEntry::Shell { commands: cmds }) => {
+                    for cmd in cmds {
+                        let cmd = cmd.trim().to_string();
+                        if cmd.is_empty() || is_noise_command(&cmd) {
+                            continue;
+                        }
+                        if seen_commands.insert(cmd.clone()) {
+                            commands.push(cmd);
+                        }
+                    }
                 }
                 Ok(LogEntry::Apps { windows }) => {
                     for w in windows {
-                        let w = w.trim().to_string();
+                        let w = strip_hostname_prefix(w.trim()).to_string();
                         if !w.is_empty() {
                             *app_counts.entry(w).or_default() += 1;
                         }
@@ -170,66 +216,100 @@ fn aggregate(files: &[PathBuf], verbose: bool) -> Result<serde_json::Value> {
                 }
                 Ok(LogEntry::ChromeTabs { tabs: t }) => {
                     for tab in t {
-                        tabs.push(serde_json::json!({
-                            "title": tab.title,
-                            "url": tab.url
-                        }));
+                        let url = tab.url.trim().to_string();
+                        if !url.is_empty() && seen_urls.insert(url.clone()) {
+                            tabs.push((tab.title.trim().to_string(), url));
+                        }
                     }
                 }
                 Ok(LogEntry::Context { data }) => {
                     for r in data.git_repos {
-                        repos.push(serde_json::json!({
-                            "repo": r.repo,
-                            "last_commit": r.last_commit
-                        }));
+                        // Mantém apenas a primeira entrada por repo (mais recente no JSONL)
+                        repo_map.entry(r.repo).or_insert(r.last_commit);
                     }
                 }
-                Err(e) => {
-                    if verbose {
-                        eprintln!("Aviso: ignorando linha: {e}");
-                    }
-                }
+                Err(_) => {}
             }
         }
     }
 
-    // Dedup commands
-    all_commands.dedup();
-    let commands: Vec<&String> = all_commands.iter().take(200).collect();
-
-    // Top apps
-    let mut top_apps: Vec<_> = app_counts.into_iter().collect();
+    let mut top_apps: Vec<(String, u32)> = app_counts.into_iter().collect();
     top_apps.sort_by(|a, b| b.1.cmp(&a.1));
-    let top_apps: Vec<serde_json::Value> = top_apps
-        .into_iter()
-        .take(20)
-        .map(|(name, count)| serde_json::json!({"app": name, "count": count}))
-        .collect();
+    top_apps.truncate(15);
 
-    // Dedup tabs by URL
-    let mut seen = HashSet::new();
-    let unique_tabs: Vec<&serde_json::Value> = tabs
-        .iter()
-        .filter(|t| {
-            let url = t["url"].as_str().unwrap_or("");
-            seen.insert(url.to_string())
-        })
-        .take(50)
-        .collect();
+    tabs.truncate(30);
 
-    Ok(serde_json::json!({
-        "periodo": dates,
-        "comandos_terminal": commands,
-        "aplicativos_mais_usados": top_apps,
-        "sites_visitados": unique_tabs,
-        "repositorios_git": repos,
-    }))
+    let mut repos: Vec<(String, String)> = repo_map.into_iter().collect();
+    // Ordenar por data do commit (string ISO, ordenação lexicográfica funciona)
+    repos.sort_by(|a, b| b.1.cmp(&a.1));
+
+    Ok(ActivityData {
+        dates,
+        commands: commands.into_iter().take(150).collect(),
+        top_apps,
+        tabs,
+        repos,
+    })
+}
+
+/// Constrói o contexto como texto plano — muito mais compacto que JSON pretty-printed.
+fn build_context(data: &ActivityData) -> String {
+    let mut out = String::new();
+
+    out.push_str(&format!("Período: {}\n\n", data.dates.join(", ")));
+
+    if !data.commands.is_empty() {
+        out.push_str("=== COMANDOS DO TERMINAL ===\n");
+        for cmd in &data.commands {
+            out.push_str(&format!("  {cmd}\n"));
+        }
+        out.push('\n');
+    }
+
+    if !data.top_apps.is_empty() {
+        out.push_str("=== APLICATIVOS ABERTOS ===\n");
+        for (app, count) in &data.top_apps {
+            if *count > 1 {
+                out.push_str(&format!("  {app} [{count}x]\n"));
+            } else {
+                out.push_str(&format!("  {app}\n"));
+            }
+        }
+        out.push('\n');
+    }
+
+    if !data.tabs.is_empty() {
+        out.push_str("=== SITES VISITADOS ===\n");
+        for (title, url) in &data.tabs {
+            if title.is_empty() || title == url {
+                out.push_str(&format!("  {url}\n"));
+            } else {
+                out.push_str(&format!("  {title}\n"));
+            }
+        }
+        out.push('\n');
+    }
+
+    if !data.repos.is_empty() {
+        out.push_str("=== REPOSITÓRIOS GIT ===\n");
+        for (repo, commit) in &data.repos {
+            // Mostrar só o nome do repo, não o path completo
+            let name = std::path::Path::new(repo)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(repo);
+            out.push_str(&format!("  {name}: {commit}\n"));
+        }
+        out.push('\n');
+    }
+
+    out
 }
 
 async fn call_ollama(
     base_url: &str,
     model: &str,
-    data: &serde_json::Value,
+    context: &str,
     lang: &str,
 ) -> Result<String> {
     let lang_instruction = match lang {
@@ -240,24 +320,17 @@ async fn call_ollama(
     };
 
     let prompt = format!(
-r#"Você é um assistente que analisa dados de atividade de computador e produz um resumo claro.
-
-{lang_instruction}
-
-Dados coletados:
-
-{data}
-
-Produza:
-
-1. **Resumo Geral**: O que o usuário fez, em 2-3 parágrafos.
-2. **Projetos Identificados**: Projetos ou tarefas em andamento.
-3. **Ferramentas Mais Usadas**: Apps e ferramentas mais utilizados.
-4. **Sites e Pesquisas**: O que foi pesquisado ou lido online.
-5. **Sugestões**: Observações úteis sobre produtividade.
-
-Seja conciso. Não invente informações além dos dados."#,
-        data = serde_json::to_string_pretty(data)?
+        "Você é um assistente que analisa dados de atividade de computador e produz um resumo claro.\n\
+         {lang_instruction}\n\n\
+         Dados coletados:\n\n\
+         {context}\n\
+         Produza:\n\
+         1. **Resumo Geral**: O que o usuário fez, em 2-3 parágrafos.\n\
+         2. **Projetos Identificados**: Projetos ou tarefas em andamento.\n\
+         3. **Ferramentas Mais Usadas**: Apps e ferramentas mais utilizados.\n\
+         4. **Sites e Pesquisas**: O que foi pesquisado ou lido online.\n\
+         5. **Sugestões**: Observações úteis sobre produtividade.\n\n\
+         Seja conciso. Não invente informações além dos dados."
     );
 
     let req = OllamaReq {
