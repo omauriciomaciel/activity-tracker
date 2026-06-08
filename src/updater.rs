@@ -47,6 +47,8 @@ pub fn run() -> Result<()> {
     let dest = std::env::current_exe().context("Não foi possível determinar o caminho do binário atual")?;
     let dest = std::fs::canonicalize(&dest).unwrap_or(dest);
 
+    // Remove antes de copiar — evita "Text file busy" se o daemon estiver rodando
+    let _ = std::fs::remove_file(&dest);
     std::fs::copy(&new_bin, &dest)
         .with_context(|| format!("Falha ao copiar para {}", dest.display()))?;
 

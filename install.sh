@@ -51,6 +51,7 @@ info "Build concluído"
 # ── Instalação ───────────────────────────────────────────────────────────────
 
 mkdir -p "$INSTALL_DIR"
+rm -f "$INSTALL_DIR/$BINARY"
 cp "$SRC" "$INSTALL_DIR/$BINARY"
 chmod +x "$INSTALL_DIR/$BINARY"
 info "Binário instalado em $INSTALL_DIR/$BINARY"

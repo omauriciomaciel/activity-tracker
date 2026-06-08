@@ -64,6 +64,7 @@ struct OllamaReq {
 struct OllamaOpts {
     temperature: f32,
     num_predict: i32,
+    seed: i64,
 }
 
 #[derive(Deserialize)]
@@ -338,8 +339,9 @@ async fn call_ollama(
         prompt,
         stream: false,
         options: OllamaOpts {
-            temperature: 0.3,
+            temperature: 0.0,
             num_predict: 2048,
+            seed: 42,
         },
     };
 
