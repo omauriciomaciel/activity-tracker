@@ -59,25 +59,25 @@ pub fn collect_all(log_dir: &Path) -> Result<usize> {
     // Shell history
     match capture_shell_history(log_dir, &ts) {
         Ok(e) => entries.push(e),
-        Err(err) => eprintln!("⚠ shell history: {err}"),
+        Err(err) => eprintln!("Aviso:shell history: {err}"),
     }
 
     // Apps/janelas abertas
     match capture_open_windows(&ts) {
         Ok(e) => entries.push(e),
-        Err(err) => eprintln!("⚠ open windows: {err}"),
+        Err(err) => eprintln!("Aviso:open windows: {err}"),
     }
 
     // Chrome tabs
     match capture_chrome_tabs(&ts) {
         Ok(e) => entries.push(e),
-        Err(err) => eprintln!("⚠ chrome tabs: {err}"),
+        Err(err) => eprintln!("Aviso:chrome tabs: {err}"),
     }
 
     // Git context
     match capture_git_context(&ts) {
         Ok(e) => entries.push(e),
-        Err(err) => eprintln!("⚠ git context: {err}"),
+        Err(err) => eprintln!("Aviso:git context: {err}"),
     }
 
     // Salvar

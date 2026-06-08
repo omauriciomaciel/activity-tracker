@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
         Commands::Collect => {
             let log_dir = config::log_dir();
             let entry_count = collector::collect_all(&log_dir)?;
-            println!("✅ Coleta concluída — {entry_count} entradas salvas");
+            println!("Coleta concluída — {entry_count} entradas salvas");
         }
 
         Commands::Summary {
@@ -117,17 +117,17 @@ async fn main() -> Result<()> {
             ConfigAction::SetModel { name } => {
                 cfg.model = name.clone();
                 cfg.save()?;
-                println!("✅ Modelo padrão: {name}");
+                println!("Modelo padrão: {name}");
             }
             ConfigAction::SetUrl { url } => {
                 cfg.ollama_url = url.clone();
                 cfg.save()?;
-                println!("✅ URL do Ollama: {url}");
+                println!("URL do Ollama: {url}");
             }
             ConfigAction::SetLang { lang } => {
                 cfg.lang = lang.clone();
                 cfg.save()?;
-                println!("✅ Idioma: {lang}");
+                println!("Idioma: {lang}");
             }
             ConfigAction::Show => {
                 println!("{}", cfg.display());

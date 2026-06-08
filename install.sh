@@ -9,9 +9,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-info()    { echo -e "${GREEN}[✓]${NC} $*"; }
+info()    { echo -e "${GREEN}[ok]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
-error()   { echo -e "${RED}[✗]${NC} $*" >&2; exit 1; }
+error()   { echo -e "${RED}[erro]${NC} $*" >&2; exit 1; }
 
 echo "=== Activity Tracker Installer ==="
 echo

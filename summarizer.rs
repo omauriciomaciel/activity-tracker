@@ -78,7 +78,7 @@ pub async fn run(
         let parsed = parse_date(raw)?;
         let path = log_dir.join(format!("{}.jsonl", parsed.format("%Y-%m-%d")));
         if !path.exists() {
-            println!("⚠️  Nenhum log encontrado para {raw}.");
+            println!("Aviso: Nenhum log encontrado para {raw}.");
             println!("   Verifique o formato: YYYY-DD-MM  (ex: 2026-08-06)");
             return Ok(());
         }
@@ -89,30 +89,30 @@ pub async fn run(
     };
 
     if files.is_empty() {
-        println!("⚠️  Nenhum log nos últimos {days} dias.");
+        println!("Aviso: Nenhum log nos últimos {days} dias.");
         println!("   Rode primeiro: activity-tracker start");
         println!("   Ou coleta manual: activity-tracker collect");
         return Ok(());
     }
-    println!("📂 {} arquivo(s) de log encontrados", files.len());
+    println!("{} arquivo(s) de log encontrados", files.len());
 
     // 2. Agregar
     let data = aggregate(&files, verbose)?;
     if verbose {
-        println!("\n📊 Dados agregados:");
+        println!("\nDados agregados:");
         println!("{}", serde_json::to_string_pretty(&data)?);
     }
 
     // 3. Chamar Ollama
-    println!("🤖 Enviando para Ollama (modelo: {model})...\n");
+    println!("Enviando para Ollama (modelo: {model})...\n");
     let summary = call_ollama(ollama_url, model, &data, lang).await?;
 
-    println!("═══════════════════════════════════════════════");
-    println!("  📋 RESUMO DE ATIVIDADES — {label}");
-    println!("  🧠 Modelo: {model}");
-    println!("═══════════════════════════════════════════════\n");
+    println!("-----------------------------------------------");
+    println!("  RESUMO DE ATIVIDADES — {label}");
+    println!("  Modelo: {model}");
+    println!("-----------------------------------------------\n");
     println!("{summary}");
-    println!("\n═══════════════════════════════════════════════");
+    println!("\n-----------------------------------------------");
 
     Ok(())
 }
@@ -186,7 +186,7 @@ fn aggregate(files: &[PathBuf], verbose: bool) -> Result<serde_json::Value> {
                 }
                 Err(e) => {
                     if verbose {
-                        eprintln!("⚠ Ignorando linha: {e}");
+                        eprintln!("Aviso: ignorando linha: {e}");
                     }
                 }
             }

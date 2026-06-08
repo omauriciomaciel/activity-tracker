@@ -48,7 +48,7 @@ impl Config {
 
     pub fn display(&self) -> String {
         format!(
-            "📋 Configuração atual ({}):\n\n  modelo:     {}\n  ollama_url: {}\n  idioma:     {}\n  logs:       {}\n  config:     {}",
+            "Configuração atual ({}):\n\n  modelo:     {}\n  ollama_url: {}\n  idioma:     {}\n  logs:       {}\n  config:     {}",
             config_path().display(),
             self.model,
             self.ollama_url,

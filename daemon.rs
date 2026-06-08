@@ -6,7 +6,7 @@ use tokio::time::{self, Duration};
 pub async fn run(interval_min: u64) -> Result<()> {
     let log_dir = config::log_dir();
 
-    println!("🚀 Activity Tracker daemon iniciado");
+    println!("Activity Tracker daemon iniciado");
     println!("   Intervalo: {}min", interval_min);
     println!("   Logs:      {}", log_dir.display());
     println!("   Parar:     Ctrl+C\n");
@@ -22,7 +22,7 @@ pub async fn run(interval_min: u64) -> Result<()> {
                 do_collect(&log_dir);
             }
             _ = signal::ctrl_c() => {
-                println!("\n⏹  Daemon parado.");
+                println!("\nDaemon parado.");
                 break;
             }
         }
@@ -34,7 +34,7 @@ pub async fn run(interval_min: u64) -> Result<()> {
 fn do_collect(log_dir: &std::path::Path) {
     let now = chrono::Local::now().format("%H:%M:%S");
     match collector::collect_all(log_dir) {
-        Ok(n) => println!("[{now}] ✅ {n} entradas coletadas"),
-        Err(e) => eprintln!("[{now}] ❌ Erro na coleta: {e}"),
+        Ok(n) => println!("[{now}] {n} entradas coletadas"),
+        Err(e) => eprintln!("[{now}] Erro na coleta: {e}"),
     }
 }
