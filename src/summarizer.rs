@@ -76,14 +76,19 @@ struct OllamaResp {
 
 // ─── Lógica principal ───────────────────────────
 
-pub async fn run(
-    days: u32,
-    date: Option<&str>,
-    model: &str,
-    ollama_url: &str,
-    lang: &str,
-    verbose: bool,
-) -> Result<()> {
+pub struct RunOptions<'a> {
+    pub days: u32,
+    pub date: Option<&'a str>,
+    pub model: &'a str,
+    pub ollama_url: &'a str,
+    pub lang: &'a str,
+    pub machine_name: &'a str,
+    pub notion: Option<(&'a str, &'a str)>,
+    pub verbose: bool,
+}
+
+pub async fn run(opts: RunOptions<'_>) -> Result<()> {
+    let RunOptions { days, date, model, ollama_url, lang, machine_name, notion, verbose } = opts;
     let log_dir = config::log_dir();
 
     let (files, label) = if let Some(raw) = date {
@@ -97,7 +102,8 @@ pub async fn run(
         (vec![path], raw.to_string())
     } else {
         let files = find_log_files(&log_dir, days);
-        (files, format!("últimos {days} dia(s)"))
+        let label = if days == 1 { "hoje".to_string() } else { format!("últimos {days} dia(s)") };
+        (files, label)
     };
 
     if files.is_empty() {
@@ -143,6 +149,20 @@ pub async fn run(
     let skin = MadSkin::default();
     skin.print_text(&summary);
     println!("\n{}", border.cyan());
+
+    if let Some((token, page_id)) = notion {
+        let date_label = match data.dates.as_slice() {
+            [] => chrono::Local::now().format("%Y-%m-%d").to_string(),
+            [single] => single.clone(),
+            dates => format!("{} a {}", dates.last().unwrap(), dates.first().unwrap()),
+        };
+        let title = format!("{date_label} — {machine_name}");
+        print!("{}", "Enviando ao Notion...".dimmed());
+        match crate::notion::send_page(token, page_id, &title, &summary).await {
+            Ok(url) => println!(" {}", url.cyan()),
+            Err(e) => eprintln!(" erro: {e}"),
+        }
+    }
 
     Ok(())
 }

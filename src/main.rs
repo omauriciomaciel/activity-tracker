@@ -2,6 +2,7 @@ mod collector;
 mod config;
 mod daemon;
 mod summarizer;
+mod notion;
 mod updater;
 
 use anyhow::Result;
@@ -60,6 +61,14 @@ enum Commands {
         #[arg(long)]
         lang: Option<String>,
 
+        /// Resumir apenas o dia de hoje (atalho para --days 1)
+        #[arg(long)]
+        today: bool,
+
+        /// Enviar resumo ao Notion após gerar
+        #[arg(long)]
+        send_notion: bool,
+
         /// Mostrar dados brutos
         #[arg(long)]
         verbose: bool,
@@ -94,6 +103,21 @@ enum ConfigAction {
     SetLang {
         /// Código (ex: pt-br, en, es)
         lang: String,
+    },
+    /// Define o nome desta máquina (aparece no título das notas do Notion)
+    SetMachineName {
+        /// Nome da máquina (ex: "MacBook Pro", "servidor-casa")
+        name: String,
+    },
+    /// Define o token da integração do Notion
+    SetNotionToken {
+        /// Token no formato secret_xxx (em notion.com/my-integrations)
+        token: String,
+    },
+    /// Define o ID da página pai no Notion
+    SetNotionPage {
+        /// ID da página (URL da página → copiar ID após o último /)
+        page_id: String,
     },
     /// Mostra a configuração atual
     Show,
@@ -137,18 +161,47 @@ async fn main() -> Result<()> {
         }
 
         Commands::Summary {
-            days,
-            date,
+            mut days,
+            mut date,
             model,
             ollama_url,
             lang,
+            today,
+            send_notion,
             verbose,
         } => {
+            if today {
+                days = 1;
+                date = None;
+            }
             let model = model.unwrap_or_else(|| cfg.model.clone());
             let url = ollama_url.unwrap_or_else(|| cfg.ollama_url.clone());
             let lang = lang.unwrap_or_else(|| cfg.lang.clone());
+            let notion = if send_notion {
+                match (&cfg.notion_token, &cfg.notion_page_id) {
+                    (Some(t), Some(p)) => Some((t.clone(), p.clone())),
+                    _ => {
+                        eprintln!("Erro: Notion não configurado. Execute:");
+                        eprintln!("  activity-tracker config set-notion-token secret_xxx");
+                        eprintln!("  activity-tracker config set-notion-page <page_id>");
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                None
+            };
 
-            summarizer::run(days, date.as_deref(), &model, &url, &lang, verbose).await?;
+let machine = cfg.get_machine_name();
+            summarizer::run(summarizer::RunOptions {
+                days,
+                date: date.as_deref(),
+                model: &model,
+                ollama_url: &url,
+                lang: &lang,
+                machine_name: &machine,
+                notion: notion.as_ref().map(|(t, p)| (t.as_str(), p.as_str())),
+                verbose,
+            }).await?;
         }
 
         Commands::Config { action } => match action {
@@ -166,6 +219,21 @@ async fn main() -> Result<()> {
                 cfg.lang = lang.clone();
                 cfg.save()?;
                 println!("Idioma: {lang}");
+            }
+            ConfigAction::SetMachineName { name } => {
+                cfg.machine_name = Some(name.clone());
+                cfg.save()?;
+                println!("Nome da máquina: {name}");
+            }
+            ConfigAction::SetNotionToken { token } => {
+                cfg.notion_token = Some(token.clone());
+                cfg.save()?;
+                println!("Notion token salvo");
+            }
+            ConfigAction::SetNotionPage { page_id } => {
+                cfg.notion_page_id = Some(page_id.clone());
+                cfg.save()?;
+                println!("Notion page ID salvo: {page_id}");
             }
             ConfigAction::Show => {
                 println!("{}", cfg.display());

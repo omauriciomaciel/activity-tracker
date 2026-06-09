@@ -7,6 +7,12 @@ pub struct Config {
     pub model: String,
     pub ollama_url: String,
     pub lang: String,
+    #[serde(default)]
+    pub notion_token: Option<String>,
+    #[serde(default)]
+    pub notion_page_id: Option<String>,
+    #[serde(default)]
+    pub machine_name: Option<String>,
 }
 
 impl Default for Config {
@@ -15,6 +21,9 @@ impl Default for Config {
             model: "llama3.1".into(),
             ollama_url: "http://localhost:11434".into(),
             lang: "pt-br".into(),
+            notion_token: None,
+            notion_page_id: None,
+            machine_name: None,
         }
     }
 }
@@ -36,6 +45,19 @@ impl Config {
         }
     }
 
+    pub fn get_machine_name(&self) -> String {
+        if let Some(name) = &self.machine_name {
+            return name.clone();
+        }
+        std::process::Command::new("hostname")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "unknown".to_string())
+    }
+
     pub fn save(&self) -> Result<()> {
         let path = config_path();
         if let Some(parent) = path.parent() {
@@ -48,11 +70,17 @@ impl Config {
 
     pub fn display(&self) -> String {
         format!(
-            "Configuração atual ({}):\n\n  modelo:     {}\n  ollama_url: {}\n  idioma:     {}\n  logs:       {}\n  config:     {}",
+            "Configuração atual ({}):\n\n  modelo:     {}\n  ollama_url: {}\n  idioma:     {}\n  máquina:    {}\n  notion:     {}\n  logs:       {}\n  config:     {}",
             config_path().display(),
             self.model,
             self.ollama_url,
             self.lang,
+            self.get_machine_name(),
+            if self.notion_token.is_some() && self.notion_page_id.is_some() {
+                "configurado"
+            } else {
+                "não configurado"
+            },
             log_dir().display(),
             config_path().display(),
         )
