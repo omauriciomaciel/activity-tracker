@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::path::Path;
 use std::process::Command;
 
@@ -44,7 +44,8 @@ pub fn run() -> Result<()> {
         bail!("Binário compilado não encontrado em {}", new_bin.display());
     }
 
-    let dest = std::env::current_exe().context("Não foi possível determinar o caminho do binário atual")?;
+    let dest = std::env::current_exe()
+        .context("Não foi possível determinar o caminho do binário atual")?;
     let dest = std::fs::canonicalize(&dest).unwrap_or(dest);
 
     // Remove antes de copiar — evita "Text file busy" se o daemon estiver rodando

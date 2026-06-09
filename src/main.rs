@@ -105,7 +105,10 @@ async fn main() -> Result<()> {
     let mut cfg = config::Config::load()?;
 
     match cli.command {
-        Commands::Start { interval, foreground } => {
+        Commands::Start {
+            interval,
+            foreground,
+        } => {
             daemon::run(interval, foreground).await?;
         }
 

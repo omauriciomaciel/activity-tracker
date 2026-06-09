@@ -1,11 +1,11 @@
 use crate::config;
 use anyhow::{Context, Result};
 use colored::Colorize;
-use termimad::MadSkin;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::BufRead;
 use std::path::PathBuf;
+use termimad::MadSkin;
 
 // ─── Tipos internos para parsing ────────────────
 
@@ -48,7 +48,7 @@ struct ActivityData {
     dates: Vec<String>,
     commands: Vec<String>,
     top_apps: Vec<(String, u32)>,
-    tabs: Vec<(String, String)>, // (title, url)
+    tabs: Vec<(String, String)>,  // (title, url)
     repos: Vec<(String, String)>, // (path, last_commit)
 }
 
@@ -94,33 +94,50 @@ pub async fn run(
             println!("   Verifique o formato: YYYY-DD-MM  (ex: 2026-08-06)");
             return Ok(());
         }
-        (vec![path], format!("{raw}"))
+        (vec![path], raw.to_string())
     } else {
         let files = find_log_files(&log_dir, days);
         (files, format!("últimos {days} dia(s)"))
     };
 
     if files.is_empty() {
-        println!("{} Nenhum log nos últimos {days} dias.", "Aviso:".yellow().bold());
+        println!(
+            "{} Nenhum log nos últimos {days} dias.",
+            "Aviso:".yellow().bold()
+        );
         println!("   Rode primeiro: {}", "activity-tracker start".cyan());
         println!("   Ou coleta manual: {}", "activity-tracker collect".cyan());
         return Ok(());
     }
-    println!("{} arquivo(s) de log encontrados", files.len().to_string().cyan());
+    println!(
+        "{} arquivo(s) de log encontrados",
+        files.len().to_string().cyan()
+    );
 
     let data = aggregate(&files)?;
     let context = build_context(&data);
 
     if verbose {
-        println!("\n{}\n{context}\n{}\n", "--- Contexto enviado ao Ollama ---".dimmed(), "---".dimmed());
+        println!(
+            "\n{}\n{context}\n{}\n",
+            "--- Contexto enviado ao Ollama ---".dimmed(),
+            "---".dimmed()
+        );
     }
 
-    println!("{}", format!("Enviando para Ollama (modelo: {model})...").dimmed());
+    println!(
+        "{}",
+        format!("Enviando para Ollama (modelo: {model})...").dimmed()
+    );
     let summary = call_ollama(ollama_url, model, &context, lang).await?;
 
     let border = "━".repeat(47);
     println!("\n{}", border.cyan());
-    println!("  {}  {}", "RESUMO DE ATIVIDADES".bold().white(), format!("— {label}").cyan());
+    println!(
+        "  {}  {}",
+        "RESUMO DE ATIVIDADES".bold().white(),
+        format!("— {label}").cyan()
+    );
     println!("  {}", format!("Modelo: {model}").dimmed());
     println!("{}\n", border.cyan());
     let skin = MadSkin::default();
@@ -155,7 +172,10 @@ fn is_noise_command(cmd: &str) -> bool {
     }
     // Comandos triviais
     let first = t.split_whitespace().next().unwrap_or("");
-    matches!(first, "ls" | "cd" | "clear" | "pwd" | "exit" | "history" | "ll" | "la" | "l")
+    matches!(
+        first,
+        "ls" | "cd" | "clear" | "pwd" | "exit" | "history" | "ll" | "la" | "l"
+    )
 }
 
 fn strip_hostname_prefix(s: &str) -> &str {
@@ -196,13 +216,13 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
         let f = std::fs::File::open(file)?;
         let lines: Vec<String> = std::io::BufReader::new(f)
             .lines()
-            .filter_map(|l| l.ok())
+            .map_while(Result::ok)
             .filter(|l| !l.trim().is_empty())
             .collect();
         for line in lines.iter().rev() {
             let line = line.as_str();
 
-            match serde_json::from_str::<LogEntry>(&line) {
+            match serde_json::from_str::<LogEntry>(line) {
                 Ok(LogEntry::Shell { commands: cmds }) => {
                     for cmd in cmds {
                         let cmd = cmd.trim().to_string();
@@ -234,8 +254,9 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
                     for r in data.git_repos {
                         // Filtra repos cujo commit não pertence à data do arquivo
                         if let Some(file_date) = file_date {
-                            let commit_date = r.last_commit.get(..10)
-                                .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+                            let commit_date = r.last_commit.get(..10).and_then(|s| {
+                                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+                            });
                             if commit_date.map(|d| d != file_date).unwrap_or(false) {
                                 continue;
                             }
@@ -249,7 +270,7 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
     }
 
     let mut top_apps: Vec<(String, u32)> = app_counts.into_iter().collect();
-    top_apps.sort_by(|a, b| b.1.cmp(&a.1));
+    top_apps.sort_by_key(|b| std::cmp::Reverse(b.1));
     top_apps.truncate(15);
 
     tabs.truncate(30);
@@ -298,7 +319,11 @@ fn build_context(data: &ActivityData) -> String {
         let mut title_counts: Vec<(String, usize)> = Vec::new();
         let mut seen_titles: HashMap<String, usize> = HashMap::new();
         for (title, url) in &data.tabs {
-            let label = if title.is_empty() || title == url { url.clone() } else { title.clone() };
+            let label = if title.is_empty() || title == url {
+                url.clone()
+            } else {
+                title.clone()
+            };
             if let Some(idx) = seen_titles.get(&label) {
                 title_counts[*idx].1 += 1;
             } else {
@@ -332,12 +357,7 @@ fn build_context(data: &ActivityData) -> String {
     out
 }
 
-async fn call_ollama(
-    base_url: &str,
-    model: &str,
-    context: &str,
-    lang: &str,
-) -> Result<String> {
+async fn call_ollama(base_url: &str, model: &str, context: &str, lang: &str) -> Result<String> {
     let lang_instruction = match lang {
         "pt-br" => "Responda em português brasileiro.",
         "en" => "Answer in English.",

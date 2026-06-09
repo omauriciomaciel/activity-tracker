@@ -26,8 +26,8 @@ impl Config {
         if path.exists() {
             let content = std::fs::read_to_string(&path)
                 .with_context(|| format!("Erro lendo {}", path.display()))?;
-            let cfg: Config = toml::from_str(&content)
-                .with_context(|| "Erro parseando config.toml")?;
+            let cfg: Config =
+                toml::from_str(&content).with_context(|| "Erro parseando config.toml")?;
             Ok(cfg)
         } else {
             let cfg = Config::default();

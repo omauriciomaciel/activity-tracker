@@ -103,10 +103,11 @@ pub fn collect_all(log_dir: &Path) -> Result<usize> {
 fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
     let home = home_dir();
     let today = Local::now().date_naive();
-    let trivial: HashSet<&str> =
-        ["ls", "cd", "clear", "pwd", "exit", "history", "ll", "la", "l"]
-            .into_iter()
-            .collect();
+    let trivial: HashSet<&str> = [
+        "ls", "cd", "clear", "pwd", "exit", "history", "ll", "la", "l",
+    ]
+    .into_iter()
+    .collect();
     let mut commands: Vec<String> = Vec::new();
 
     // Bash — usa timestamps do HISTTIMEFORMAT para filtrar por data
@@ -134,25 +135,29 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
                 let mut parts = rest.splitn(2, ';');
                 let meta = parts.next().unwrap_or("");
                 let cmd = parts.next().unwrap_or("").to_string();
-                let secs = meta.splitn(2, ':').next().unwrap_or("").trim().to_string();
+                let secs = meta.split(':').next().unwrap_or("").trim().to_string();
                 (secs, cmd)
             } else {
-                (String::new(), line.splitn(2, ';').nth(1).unwrap_or(&line).to_string())
+                (
+                    String::new(),
+                    line.split_once(';').map(|x| x.1).unwrap_or(&line).to_string(),
+                )
             };
 
-            if cmd.is_empty() { continue; }
+            if cmd.is_empty() {
+                continue;
+            }
 
-            if !ts_secs.is_empty() {
-                if let Ok(secs) = ts_secs.parse::<i64>() {
-                    let cmd_date = chrono::DateTime::from_timestamp(secs, 0)
-                        .map(|dt| dt.date_naive());
+            if !ts_secs.is_empty()
+                && let Ok(secs) = ts_secs.parse::<i64>() {
+                    let cmd_date =
+                        chrono::DateTime::from_timestamp(secs, 0).map(|dt| dt.date_naive());
                     if cmd_date.map(|d| d != today).unwrap_or(false) {
                         continue;
                     }
                 }
-            }
 
-            let first = cmd.trim().split_whitespace().next().unwrap_or("");
+            let first = cmd.split_whitespace().next().unwrap_or("");
             if !first.is_empty() && !trivial.contains(first) {
                 commands.push(cmd.trim().to_string());
             }
@@ -166,7 +171,7 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
         let raw = read_incremental(&fish_hist, &marker, 200)?;
         for line in raw {
             if let Some(cmd) = line.strip_prefix("- cmd: ") {
-                let first = cmd.trim().split_whitespace().next().unwrap_or("");
+                let first = cmd.split_whitespace().next().unwrap_or("");
                 if !first.is_empty() && !trivial.contains(first) {
                     commands.push(cmd.trim().to_string());
                 }
@@ -203,13 +208,14 @@ fn filter_by_date(raw: Vec<String>, date: NaiveDate) -> Vec<String> {
 
     for line in raw {
         let trimmed = line.trim();
-        if trimmed.is_empty() { continue; }
+        if trimmed.is_empty() {
+            continue;
+        }
 
         let inner = trimmed.strip_prefix('#').unwrap_or(trimmed);
         if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit()) {
             if let Ok(secs) = inner.parse::<i64>() {
-                current_date = chrono::DateTime::from_timestamp(secs, 0)
-                    .map(|dt| dt.date_naive());
+                current_date = chrono::DateTime::from_timestamp(secs, 0).map(|dt| dt.date_naive());
             }
             continue;
         }
@@ -227,10 +233,7 @@ fn read_incremental(file: &Path, marker: &Path, max: usize) -> Result<Vec<String
     let current_size = meta.len();
 
     let last_pos: u64 = if marker.exists() {
-        std::fs::read_to_string(marker)?
-            .trim()
-            .parse()
-            .unwrap_or(0)
+        std::fs::read_to_string(marker)?.trim().parse().unwrap_or(0)
     } else {
         // Primeira vez: pegar só as últimas linhas
         current_size.saturating_sub(4096)
@@ -243,7 +246,9 @@ fn read_incremental(file: &Path, marker: &Path, max: usize) -> Result<Vec<String
         let mut f = std::fs::File::open(file)?;
         f.seek(SeekFrom::Start(last_pos))?;
         let mut buf = String::new();
-        f.take(current_size - last_pos).read_to_string(&mut buf).ok();
+        f.take(current_size - last_pos)
+            .read_to_string(&mut buf)
+            .ok();
         lines = buf
             .lines()
             .filter(|l| !l.trim().is_empty())
@@ -263,8 +268,8 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
     let mut windows: Vec<String> = Vec::new();
 
     // Tentar wmctrl (X11)
-    if let Ok(out) = Command::new("wmctrl").args(["-l"]).output() {
-        if out.status.success() {
+    if let Ok(out) = Command::new("wmctrl").args(["-l"]).output()
+        && out.status.success() {
             for line in out.stdout.lines().map_while(Result::ok) {
                 // Formato: 0x... desktop_num host título_da_janela
                 let parts: Vec<&str> = line.splitn(4, char::is_whitespace).collect();
@@ -284,45 +289,37 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
                 }
             }
         }
-    }
 
     // Fallback: xdotool
-    if windows.is_empty() {
-        if let Ok(out) = Command::new("xdotool")
+    if windows.is_empty()
+        && let Ok(out) = Command::new("xdotool")
             .args(["search", "--onlyvisible", "--name", ""])
             .output()
-        {
-            if out.status.success() {
+            && out.status.success() {
                 for line in out.stdout.lines().map_while(Result::ok) {
-                    if let Ok(wid) = line.trim().parse::<u64>() {
-                        if let Ok(name_out) = Command::new("xdotool")
+                    if let Ok(wid) = line.trim().parse::<u64>()
+                        && let Ok(name_out) = Command::new("xdotool")
                             .args(["getwindowname", &wid.to_string()])
                             .output()
                         {
-                            let name = String::from_utf8_lossy(&name_out.stdout)
-                                .trim()
-                                .to_string();
+                            let name = String::from_utf8_lossy(&name_out.stdout).trim().to_string();
                             if !name.is_empty() {
                                 windows.push(name);
                             }
                         }
-                    }
                 }
                 windows.truncate(30);
             }
-        }
-    }
 
     // Fallback macOS
-    if windows.is_empty() && cfg!(target_os = "macos") {
-        if let Ok(out) = Command::new("osascript")
+    if windows.is_empty() && cfg!(target_os = "macos")
+        && let Ok(out) = Command::new("osascript")
             .args([
                 "-e",
                 r#"tell application "System Events" to get name of every application process whose visible is true"#,
             ])
             .output()
-        {
-            if out.status.success() {
+            && out.status.success() {
                 let text = String::from_utf8_lossy(&out.stdout);
                 for app in text.split(", ") {
                     let name = app.trim().to_string();
@@ -331,21 +328,37 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
                     }
                 }
             }
-        }
-    }
 
     // Último recurso: /proc no Linux
-    if windows.is_empty() && cfg!(target_os = "linux") {
-        if let Ok(out) = Command::new("ps")
-            .args(["axo", "comm"])
-            .output()
-        {
+    if windows.is_empty() && cfg!(target_os = "linux")
+        && let Ok(out) = Command::new("ps").args(["axo", "comm"]).output() {
             let gui_hints: HashSet<&str> = [
-                "code", "firefox", "chrome", "chromium", "brave", "slack",
-                "discord", "spotify", "telegram", "nautilus", "thunar",
-                "alacritty", "kitty", "wezterm", "gnome-terminal",
-                "konsole", "tilix", "obs", "gimp", "inkscape", "blender",
-                "libreoffice", "thunderbird", "signal", "vlc", "mpv",
+                "code",
+                "firefox",
+                "chrome",
+                "chromium",
+                "brave",
+                "slack",
+                "discord",
+                "spotify",
+                "telegram",
+                "nautilus",
+                "thunar",
+                "alacritty",
+                "kitty",
+                "wezterm",
+                "gnome-terminal",
+                "konsole",
+                "tilix",
+                "obs",
+                "gimp",
+                "inkscape",
+                "blender",
+                "libreoffice",
+                "thunderbird",
+                "signal",
+                "vlc",
+                "mpv",
             ]
             .into_iter()
             .collect();
@@ -358,7 +371,6 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
                 }
             }
         }
-    }
 
     Ok(Entry::Apps {
         ts: ts.to_string(),
@@ -389,8 +401,7 @@ fn capture_chrome_tabs(ts: &str) -> Result<Entry> {
 
 fn fetch_devtools_tabs() -> Result<Vec<TabInfo>> {
     // Blocking HTTP pois collector roda em thread sync
-    let body = reqwest::blocking::get("http://localhost:9222/json/list")?
-        .text()?;
+    let body = reqwest::blocking::get("http://localhost:9222/json/list")?.text()?;
 
     let entries: Vec<serde_json::Value> = serde_json::from_str(&body)?;
     let tabs = entries
@@ -424,10 +435,8 @@ fn read_chrome_history_db() -> Result<Vec<TabInfo>> {
         }
 
         // Chrome trava o DB — copiar para tmp
-        let tmp = std::env::temp_dir().join(format!(
-            "activity_tracker_chrome_{}.db",
-            std::process::id()
-        ));
+        let tmp =
+            std::env::temp_dir().join(format!("activity_tracker_chrome_{}.db", std::process::id()));
         if std::fs::copy(db_path, &tmp).is_err() {
             continue;
         }
@@ -485,9 +494,12 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
     if let Ok(out) = Command::new("find")
         .args([
             home.to_str().unwrap_or("."),
-            "-maxdepth", "4",
-            "-name", ".git",
-            "-type", "d",
+            "-maxdepth",
+            "4",
+            "-name",
+            ".git",
+            "-type",
+            "d",
         ])
         .output()
     {
@@ -500,10 +512,13 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
                 .output()
             {
                 let msg = String::from_utf8_lossy(&log_out.stdout).trim().to_string();
-                if msg.is_empty() { continue; }
+                if msg.is_empty() {
+                    continue;
+                }
 
                 // Só inclui repos com commit de hoje: "YYYY-MM-DD HH:MM:SS ..."
-                let commit_date = msg.get(..10)
+                let commit_date = msg
+                    .get(..10)
                     .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
                 if commit_date.map(|d| d == today).unwrap_or(false) {
                     repos.push(GitRepoInfo {
@@ -566,14 +581,18 @@ fn clean_log_file(path: &Path, date: NaiveDate) -> Result<usize> {
         }
         let mut val: serde_json::Value = match serde_json::from_str(line) {
             Ok(v) => v,
-            Err(_) => { out_lines.push(line.to_string()); continue; }
+            Err(_) => {
+                out_lines.push(line.to_string());
+                continue;
+            }
         };
 
         match val.get("type").and_then(|t| t.as_str()) {
             Some("shell") => {
                 if let Some(cmds) = val["commands"].as_array().cloned() {
                     // Reutiliza filter_by_date: converte Value → String, filtra, converte de volta
-                    let raw: Vec<String> = cmds.iter()
+                    let raw: Vec<String> = cmds
+                        .iter()
                         .filter_map(|v| v.as_str().map(|s| s.to_string()))
                         .collect();
                     let before = raw.len();
@@ -589,15 +608,20 @@ fn clean_log_file(path: &Path, date: NaiveDate) -> Result<usize> {
             }
             Some("context") => {
                 if let Some(repos) = val["data"]["git_repos"].as_array().cloned() {
-                    let kept: Vec<serde_json::Value> = repos.into_iter().filter(|r| {
-                        let commit = r["last_commit"].as_str().unwrap_or("");
-                        commit.get(..10)
-                            .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-                            .map(|d| d == date)
-                            .unwrap_or(false)
-                    }).collect();
+                    let kept: Vec<serde_json::Value> = repos
+                        .into_iter()
+                        .filter(|r| {
+                            let commit = r["last_commit"].as_str().unwrap_or("");
+                            commit
+                                .get(..10)
+                                .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+                                .map(|d| d == date)
+                                .unwrap_or(false)
+                        })
+                        .collect();
 
-                    let removed_here = val["data"]["git_repos"].as_array()
+                    let removed_here = val["data"]["git_repos"]
+                        .as_array()
                         .map(|a| a.len())
                         .unwrap_or(0)
                         .saturating_sub(kept.len());
