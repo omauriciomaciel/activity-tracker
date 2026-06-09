@@ -68,9 +68,76 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo "  sudo cp $SRC /usr/local/bin/$BINARY"
 fi
 
-# ── Autostart via systemd (inicia automaticamente no login) ──────────────────
+# ── Autostart (systemd no Linux, launchd no macOS) ───────────────────────────
 
-if command -v systemctl &>/dev/null; then
+if [[ "$(uname)" == "Darwin" ]]; then
+    echo
+    echo "Configurando autostart via launchd (macOS)..."
+
+    PLIST_DIR="$HOME/Library/LaunchAgents"
+    PLIST_FILE="$PLIST_DIR/com.activity-tracker.plist"
+    mkdir -p "$PLIST_DIR"
+    mkdir -p "$HOME/.local/share/activity-tracker"
+
+    cat > "$PLIST_FILE" << PLIST_END
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.activity-tracker</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$INSTALL_DIR/$BINARY</string>
+        <string>start</string>
+        <string>--foreground</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>$HOME/.local/share/activity-tracker/daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/.local/share/activity-tracker/daemon.log</string>
+</dict>
+</plist>
+PLIST_END
+
+    launchctl unload "$PLIST_FILE" 2>/dev/null || true
+    launchctl load -w "$PLIST_FILE"
+
+    info "LaunchAgent ativado — inicia automaticamente no login"
+    info "  Status: launchctl list | grep activity-tracker"
+    info "  Parar:  launchctl unload $PLIST_FILE"
+    info "  Logs:   tail -f $HOME/.local/share/activity-tracker/daemon.log"
+
+    # ── Permissões macOS ─────────────────────────────────────────────────────
+    echo
+    echo "┌─────────────────────────────────────────────────────────────────┐"
+    echo "│  Permissões necessárias no macOS (requer ação manual)           │"
+    echo "├─────────────────────────────────────────────────────────────────┤"
+    echo "│  1. Full Disk Access  — para ler histórico do Chrome/Brave      │"
+    echo "│  2. Accessibility     — para capturar títulos de janelas        │"
+    echo "└─────────────────────────────────────────────────────────────────┘"
+    echo
+    warn "Abra as telas abaixo e adicione: $INSTALL_DIR/$BINARY"
+    echo
+    echo "  Abrindo System Settings → Full Disk Access..."
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" 2>/dev/null || true
+    echo "  Pressione Enter quando conceder Full Disk Access..."
+    read -r
+    echo "  Abrindo System Settings → Accessibility..."
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
+    echo "  Pressione Enter quando conceder Accessibility..."
+    read -r
+    info "Permissões configuradas"
+
+elif command -v systemctl &>/dev/null; then
     echo
     echo "Configurando autostart via systemd..."
 
@@ -78,7 +145,7 @@ if command -v systemctl &>/dev/null; then
     SERVICE_FILE="$SYSTEMD_DIR/activity-tracker.service"
     mkdir -p "$SYSTEMD_DIR"
 
-    cat > "$SERVICE_FILE" << EOF
+    cat > "$SERVICE_FILE" << SYSTEMD_END
 [Unit]
 Description=Activity Tracker daemon
 After=graphical-session.target
@@ -94,7 +161,7 @@ StandardError=journal
 
 [Install]
 WantedBy=default.target
-EOF
+SYSTEMD_END
 
     systemctl --user daemon-reload
     systemctl --user enable activity-tracker.service
@@ -103,10 +170,12 @@ EOF
     info "Serviço systemd ativado — inicia automaticamente no login"
     info "  Status: systemctl --user status activity-tracker"
     info "  Logs:   journalctl --user -u activity-tracker -f"
+
 else
-    warn "systemctl não encontrado — autostart não configurado."
+    warn "Nem systemd nem launchd encontrados — autostart não configurado."
     warn "Inicie manualmente com: $BINARY start"
 fi
+
 
 # ── Próximos passos ──────────────────────────────────────────────────────────
 
