@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-06-09)
+
+### Features
+
+- **notion**: Implementa integração para exportar resumos
+  ([`a553bd1`](https://github.com/omauriciomaciel/activity-tracker/commit/a553bd17507e7564fdfb96e9ceb4c2352a39f7ab))
+
+
 ## v1.1.0 (2026-06-09)
 
 ### Bug Fixes
