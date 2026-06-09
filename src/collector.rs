@@ -85,6 +85,11 @@ pub fn collect_all(log_dir: &Path) -> Result<usize> {
         .create(true)
         .append(true)
         .open(&log_file)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&log_file, std::fs::Permissions::from_mode(0o600));
+    }
 
     let count = entries.len();
     for entry in &entries {
@@ -259,6 +264,11 @@ fn read_incremental(file: &Path, marker: &Path, max: usize) -> Result<Vec<String
 
     // Atualizar marker
     std::fs::write(marker, current_size.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(marker, std::fs::Permissions::from_mode(0o600));
+    }
     Ok(lines)
 }
 
@@ -434,11 +444,21 @@ fn read_chrome_history_db() -> Result<Vec<TabInfo>> {
             continue;
         }
 
-        // Chrome trava o DB — copiar para tmp
-        let tmp =
-            std::env::temp_dir().join(format!("activity_tracker_chrome_{}.db", std::process::id()));
+        // Chrome trava o DB — copiar para dir privado do usuário (evita TOCTOU em /tmp)
+        let private_dir = dirs::data_local_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join("activity-tracker");
+        let _ = std::fs::create_dir_all(&private_dir);
+        let tmp = private_dir.join(format!("chrome_tmp_{}.db", std::process::id()));
+        // H4 — limpar temp mesmo se copy falhar
         if std::fs::copy(db_path, &tmp).is_err() {
+            let _ = std::fs::remove_file(&tmp);
             continue;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
         }
 
         let result = (|| -> Result<Vec<TabInfo>> {
