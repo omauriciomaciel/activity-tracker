@@ -513,6 +513,7 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
     // find -maxdepth 4 -name .git
     if let Ok(out) = Command::new("find")
         .args([
+            "-P",  // never follow symlinks
             home.to_str().unwrap_or("."),
             "-maxdepth",
             "4",
@@ -526,6 +527,11 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
         for line in out.stdout.lines().map_while(Result::ok) {
             let git_dir = line.trim();
             let repo_dir = git_dir.strip_suffix("/.git").unwrap_or(git_dir);
+
+            // Reject paths outside $HOME (symlink escape guard)
+            if !std::path::Path::new(repo_dir).starts_with(&home) {
+                continue;
+            }
 
             if let Ok(log_out) = Command::new("git")
                 .args(["-C", repo_dir, "log", "-1", "--format=%ai %s"])

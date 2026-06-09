@@ -11,6 +11,18 @@ pub fn run() -> Result<()> {
 
     // ── git pull ─────────────────────────────────────────────────────────────
 
+    // Warn if remote uses unencrypted HTTP
+    if let Ok(out) = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(src)
+        .output()
+    {
+        let remote = String::from_utf8_lossy(&out.stdout);
+        if remote.trim_start().starts_with("http://") {
+            eprintln!("Aviso: remote 'origin' usa HTTP sem criptografia — considere HTTPS ou SSH");
+        }
+    }
+
     println!("\n[1/3] git pull...");
     let status = Command::new("git")
         .args(["pull", "--ff-only"])
@@ -48,10 +60,12 @@ pub fn run() -> Result<()> {
         .context("Não foi possível determinar o caminho do binário atual")?;
     let dest = std::fs::canonicalize(&dest).unwrap_or(dest);
 
-    // Remove antes de copiar — evita "Text file busy" se o daemon estiver rodando
-    let _ = std::fs::remove_file(&dest);
-    std::fs::copy(&new_bin, &dest)
-        .with_context(|| format!("Falha ao copiar para {}", dest.display()))?;
+    // Copia para temp na mesma partição, depois rename atômico — evita janela sem binário
+    let tmp_dest = dest.with_extension("_new");
+    std::fs::copy(&new_bin, &tmp_dest)
+        .with_context(|| format!("Falha ao copiar para {}", tmp_dest.display()))?;
+    std::fs::rename(&tmp_dest, &dest)
+        .with_context(|| format!("Falha ao substituir {}", dest.display()))?;
 
     println!("\nAtualização concluída → {}", dest.display());
     Ok(())

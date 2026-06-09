@@ -288,6 +288,44 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
     })
 }
 
+fn scrub_secrets(cmd: &str) -> String {
+    const SENSITIVE: &[&str] = &[
+        "password", "passwd", "secret", "token", "apikey", "api_key",
+        "auth", "credential", "private", "pass", "bearer", "access_key",
+        "secret_key", "private_key",
+    ];
+
+    let tokens: Vec<&str> = cmd.split_whitespace().collect();
+    let mut out: Vec<String> = Vec::with_capacity(tokens.len());
+    let mut redact_next = false;
+
+    for token in &tokens {
+        if redact_next {
+            out.push("[REDACTED]".to_string());
+            redact_next = false;
+            continue;
+        }
+        // KEY=VALUE
+        if let Some(eq_pos) = token.find('=') {
+            let key = token[..eq_pos].trim_start_matches('-').to_lowercase();
+            if SENSITIVE.iter().any(|s| key.contains(s)) && eq_pos + 1 < token.len() {
+                out.push(format!("{}=[REDACTED]", &token[..eq_pos]));
+                continue;
+            }
+        }
+        // --flag <value> (flag name contains sensitive keyword, value is next token)
+        let flag_name = token.trim_start_matches('-').split('=').next().unwrap_or("").to_lowercase();
+        if token.starts_with('-') && !token.contains('=') && SENSITIVE.iter().any(|s| flag_name.contains(s)) {
+            out.push(token.to_string());
+            redact_next = true;
+            continue;
+        }
+        out.push(token.to_string());
+    }
+
+    out.join(" ")
+}
+
 /// Constrói o contexto como texto plano — muito mais compacto que JSON pretty-printed.
 fn build_context(data: &ActivityData) -> String {
     let mut out = String::new();
@@ -297,6 +335,7 @@ fn build_context(data: &ActivityData) -> String {
     if !data.commands.is_empty() {
         out.push_str("=== COMANDOS DO TERMINAL ===\n");
         for cmd in &data.commands {
+            let cmd = scrub_secrets(cmd);
             out.push_str(&format!("  {cmd}\n"));
         }
         out.push('\n');
@@ -357,7 +396,23 @@ fn build_context(data: &ActivityData) -> String {
     out
 }
 
+
+fn validate_ollama_url(url: &str) -> Result<()> {
+    let parsed = reqwest::Url::parse(url)
+        .with_context(|| format!("ollama_url inválida: '{url}'"))?;
+    match parsed.scheme() {
+        "http" | "https" => {}
+        s => anyhow::bail!("ollama_url: esquema '{s}' não permitido (use http ou https)"),
+    }
+    if let Some(host) = parsed.host_str()
+        && matches!(host, "169.254.169.254" | "metadata.google.internal" | "metadata.google") {
+            anyhow::bail!("ollama_url: host '{host}' não permitido");
+        }
+    Ok(())
+}
+
 async fn call_ollama(base_url: &str, model: &str, context: &str, lang: &str) -> Result<String> {
+    validate_ollama_url(base_url)?;
     let lang_instruction = match lang {
         "pt-br" => "Responda em português brasileiro.",
         "en" => "Answer in English.",
