@@ -3,6 +3,7 @@ name = "activity-tracker"
 version = "0.2.0"
 edition = "2024"
 description = "Captura atividades do sistema e resume com Ollama"
+repository = "https://github.com/omauriciomaciel/activity-tracker"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -18,3 +19,6 @@ toml = "0.8"
 glob = "0.3"
 colored = "2"
 termimad = "0.23"
+flate2 = "1"
+tar = "0.4"
+zip = "2"
