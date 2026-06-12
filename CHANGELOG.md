@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-06-12)
+
+### Chores
+
+- **ci**: Remove build para Windows e atualiza dependências
+  ([`bd8c2b1`](https://github.com/omauriciomaciel/activity-tracker/commit/bd8c2b1b11a6d3f7d75ecfa90f2e7eb68c833ae2))
+
+### Documentation
+
+- **readme**: Atualiza instruções de instalação e uso de aliases
+  ([`47596a7`](https://github.com/omauriciomaciel/activity-tracker/commit/47596a74a40424ae8dfe6402b3afb3a329581560))
+
+### Features
+
+- **collector**: Captura múltiplos commits por repositório
+  ([`4072dae`](https://github.com/omauriciomaciel/activity-tracker/commit/4072dae55a963757e45d239f6c8d3e8176e87791))
+
+- **install**: Adiciona aliases 'at' e 'ats' para o CLI
+  ([`5a2a7b4`](https://github.com/omauriciomaciel/activity-tracker/commit/5a2a7b4de4475889197cd01550c8ca8e96e179b1))
+
+
 ## v1.4.0 (2026-06-12)
 
 ### Chores
