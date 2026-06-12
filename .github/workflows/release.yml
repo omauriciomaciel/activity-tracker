@@ -65,8 +65,6 @@ jobs:
             os: macos-13
           - target: aarch64-apple-darwin
             os: macos-14
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
 
     env:
       RELEASE_TAG: ${{ needs.release.outputs.tag }}
@@ -196,18 +194,6 @@ jobs:
           cp "target/${{ matrix.target }}/release/activity-tracker" .
           tar czf "activity-tracker-${VERSION}-macos-${ARCH}.tar.gz" \
             activity-tracker README.md install.sh
-
-      # ── Windows packaging ──────────────────────────────────────────────────
-
-      - name: Package Windows .zip
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $VERSION = $env:RELEASE_TAG -replace '^v', ''
-          Copy-Item "target/${{ matrix.target }}/release/activity-tracker.exe" .
-          Compress-Archive `
-            -Path activity-tracker.exe, README.md, install.sh `
-            -DestinationPath "activity-tracker-${VERSION}-windows-x86_64.zip"
 
       # ── Upload ─────────────────────────────────────────────────────────────
 
