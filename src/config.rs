@@ -20,6 +20,10 @@ pub struct Config {
     pub machine_name: Option<String>,
     #[serde(default)]
     pub slack_webhook: Option<String>,
+    /// Padrões de privacidade: comandos/URLs/títulos que contêm qualquer um desses
+    /// termos (case-insensitive) são removidos dos logs antes de salvar.
+    #[serde(default)]
+    pub blocked_patterns: Vec<String>,
 }
 
 fn default_provider() -> String {
@@ -38,6 +42,7 @@ impl Default for Config {
             notion_page_id: None,
             machine_name: None,
             slack_webhook: None,
+            blocked_patterns: Vec::new(),
         }
     }
 }
@@ -98,8 +103,17 @@ impl Config {
                     .unwrap_or_else(|| "não configurado".into())
             )
         };
+        let blocked_line = if self.blocked_patterns.is_empty() {
+            "  bloqueados: nenhum".to_string()
+        } else {
+            format!(
+                "  bloqueados: {} padrão(s): {}",
+                self.blocked_patterns.len(),
+                self.blocked_patterns.join(", ")
+            )
+        };
         format!(
-            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n  máquina:    {}\n  notion:     {}\n  slack:      {}\n  logs:       {}\n  config:     {}",
+            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n  máquina:    {}\n  notion:     {}\n  slack:      {}\n{}\n  logs:       {}\n  config:     {}",
             config_path().display(),
             self.provider,
             self.model,
@@ -116,6 +130,7 @@ impl Config {
             } else {
                 "não configurado"
             },
+            blocked_line,
             log_dir().display(),
             config_path().display(),
         )

@@ -47,7 +47,7 @@ pub struct GitRepoInfo {
 
 /// Executa todas as coletas e salva no arquivo JSONL do dia.
 /// Retorna o número de entradas salvas.
-pub fn collect_all(log_dir: &Path) -> Result<usize> {
+pub fn collect_all(log_dir: &Path, blocked: &[String]) -> Result<usize> {
     std::fs::create_dir_all(log_dir)?;
 
     let date = Local::now().format("%Y-%m-%d").to_string();
@@ -57,19 +57,19 @@ pub fn collect_all(log_dir: &Path) -> Result<usize> {
     let mut entries: Vec<Entry> = Vec::new();
 
     // Shell history
-    match capture_shell_history(log_dir, &ts) {
+    match capture_shell_history(log_dir, &ts, blocked) {
         Ok(e) => entries.push(e),
         Err(err) => eprintln!("Aviso:shell history: {err}"),
     }
 
     // Apps/janelas abertas
-    match capture_open_windows(&ts) {
+    match capture_open_windows(&ts, blocked) {
         Ok(e) => entries.push(e),
         Err(err) => eprintln!("Aviso:open windows: {err}"),
     }
 
     // Chrome tabs
-    match capture_chrome_tabs(&ts) {
+    match capture_chrome_tabs(&ts, blocked) {
         Ok(e) => entries.push(e),
         Err(err) => eprintln!("Aviso:chrome tabs: {err}"),
     }
@@ -103,9 +103,19 @@ pub fn collect_all(log_dir: &Path) -> Result<usize> {
     Ok(count)
 }
 
+// ─── Privacidade ────────────────────────────────
+
+fn is_blocked(text: &str, patterns: &[String]) -> bool {
+    if patterns.is_empty() {
+        return false;
+    }
+    let lower = text.to_lowercase();
+    patterns.iter().any(|p| lower.contains(&p.to_lowercase()))
+}
+
 // ─── 1. Shell History ───────────────────────────
 
-fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
+fn capture_shell_history(log_dir: &Path, ts: &str, blocked: &[String]) -> Result<Entry> {
     let home = home_dir();
     let today = Local::now().date_naive();
     let trivial: HashSet<&str> = [
@@ -123,7 +133,7 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
         for cmd in filter_by_date(raw, today) {
             let trimmed = cmd.trim();
             let first = trimmed.split_whitespace().next().unwrap_or("");
-            if !first.is_empty() && !trivial.contains(first) {
+            if !first.is_empty() && !trivial.contains(first) && !is_blocked(trimmed, blocked) {
                 commands.push(trimmed.to_string());
             }
         }
@@ -166,7 +176,7 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
             }
 
             let first = cmd.split_whitespace().next().unwrap_or("");
-            if !first.is_empty() && !trivial.contains(first) {
+            if !first.is_empty() && !trivial.contains(first) && !is_blocked(cmd.trim(), blocked) {
                 commands.push(cmd.trim().to_string());
             }
         }
@@ -180,7 +190,8 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
         for line in raw {
             if let Some(cmd) = line.strip_prefix("- cmd: ") {
                 let first = cmd.split_whitespace().next().unwrap_or("");
-                if !first.is_empty() && !trivial.contains(first) {
+                if !first.is_empty() && !trivial.contains(first) && !is_blocked(cmd.trim(), blocked)
+                {
                     commands.push(cmd.trim().to_string());
                 }
             }
@@ -277,7 +288,7 @@ fn read_incremental(file: &Path, marker: &Path, max: usize) -> Result<Vec<String
 
 // ─── 2. Janelas abertas ─────────────────────────
 
-fn capture_open_windows(ts: &str) -> Result<Entry> {
+fn capture_open_windows(ts: &str, blocked: &[String]) -> Result<Entry> {
     let mut windows: Vec<String> = Vec::new();
 
     // Tentar wmctrl (X11)
@@ -297,7 +308,7 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
                     .unwrap_or(raw_title.trim())
                     .trim()
                     .to_string();
-                if !title.is_empty() {
+                if !title.is_empty() && !is_blocked(&title, blocked) {
                     windows.push(title);
                 }
             }
@@ -318,7 +329,7 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
                     .output()
             {
                 let name = String::from_utf8_lossy(&name_out.stdout).trim().to_string();
-                if !name.is_empty() {
+                if !name.is_empty() && !is_blocked(&name, blocked) {
                     windows.push(name);
                 }
             }
@@ -334,15 +345,16 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
                 r#"tell application "System Events" to get name of every application process whose visible is true"#,
             ])
             .output()
-            && out.status.success() {
-                let text = String::from_utf8_lossy(&out.stdout);
-                for app in text.split(", ") {
-                    let name = app.trim().to_string();
-                    if !name.is_empty() {
-                        windows.push(name);
-                    }
-                }
+            && out.status.success()
+    {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for app in text.split(", ") {
+            let name = app.trim().to_string();
+            if !name.is_empty() && !is_blocked(&name, blocked) {
+                windows.push(name);
             }
+        }
+    }
 
     // Último recurso: /proc no Linux
     if windows.is_empty()
@@ -383,7 +395,10 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
         let mut seen = HashSet::new();
         for line in out.stdout.lines().map_while(Result::ok) {
             let name = line.trim().to_string();
-            if gui_hints.contains(name.as_str()) && seen.insert(name.clone()) {
+            if gui_hints.contains(name.as_str())
+                && seen.insert(name.clone())
+                && !is_blocked(&name, blocked)
+            {
                 windows.push(name);
             }
         }
@@ -397,7 +412,7 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
 
 // ─── 3. Chrome Tabs ─────────────────────────────
 
-fn capture_chrome_tabs(ts: &str) -> Result<Entry> {
+fn capture_chrome_tabs(ts: &str, blocked: &[String]) -> Result<Entry> {
     let mut tabs: Vec<TabInfo> = Vec::new();
 
     // Método 1: Chrome DevTools Protocol
@@ -409,6 +424,8 @@ fn capture_chrome_tabs(ts: &str) -> Result<Entry> {
     if tabs.is_empty() {
         tabs = read_chrome_history_db()?;
     }
+
+    tabs.retain(|t| !is_blocked(&t.url, blocked) && !is_blocked(&t.title, blocked));
 
     Ok(Entry::ChromeTabs {
         ts: ts.to_string(),

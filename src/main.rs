@@ -199,6 +199,18 @@ enum ConfigAction {
         /// Webhook URL (em api.slack.com/apps → Incoming Webhooks)
         url: String,
     },
+    /// Adiciona um padrão de privacidade (comandos/URLs/títulos que o contenham serão bloqueados)
+    AddBlock {
+        /// Termo a bloquear (ex: "senha", "postgres://", "meusite.com")
+        pattern: String,
+    },
+    /// Remove um padrão de privacidade
+    RemoveBlock {
+        /// Termo a remover da lista de bloqueados
+        pattern: String,
+    },
+    /// Lista os padrões de privacidade ativos
+    ListBlocks,
     /// Mostra a configuração atual
     Show,
 }
@@ -226,7 +238,7 @@ async fn main() -> Result<()> {
 
         Commands::Collect => {
             let log_dir = config::log_dir();
-            let entry_count = collector::collect_all(&log_dir)?;
+            let entry_count = collector::collect_all(&log_dir, &cfg.blocked_patterns)?;
             println!("Coleta concluída — {entry_count} entradas salvas");
         }
 
@@ -405,6 +417,45 @@ async fn main() -> Result<()> {
                 cfg.slack_webhook = Some(url.clone());
                 cfg.save()?;
                 println!("Slack webhook salvo");
+            }
+            ConfigAction::AddBlock { pattern } => {
+                let lower = pattern.to_lowercase();
+                if cfg
+                    .blocked_patterns
+                    .iter()
+                    .any(|p| p.to_lowercase() == lower)
+                {
+                    println!("Padrão já existe: {pattern}");
+                } else {
+                    cfg.blocked_patterns.push(pattern.clone());
+                    cfg.save()?;
+                    println!("Padrão adicionado: {pattern}");
+                    println!(
+                        "Total: {} padrão(s) bloqueado(s)",
+                        cfg.blocked_patterns.len()
+                    );
+                }
+            }
+            ConfigAction::RemoveBlock { pattern } => {
+                let lower = pattern.to_lowercase();
+                let before = cfg.blocked_patterns.len();
+                cfg.blocked_patterns.retain(|p| p.to_lowercase() != lower);
+                if cfg.blocked_patterns.len() < before {
+                    cfg.save()?;
+                    println!("Padrão removido: {pattern}");
+                } else {
+                    println!("Padrão não encontrado: {pattern}");
+                }
+            }
+            ConfigAction::ListBlocks => {
+                if cfg.blocked_patterns.is_empty() {
+                    println!("Nenhum padrão de privacidade configurado.");
+                } else {
+                    println!("{} padrão(s) bloqueado(s):", cfg.blocked_patterns.len());
+                    for p in &cfg.blocked_patterns {
+                        println!("  - {p}");
+                    }
+                }
             }
             ConfigAction::Show => {
                 println!("{}", cfg.display());
