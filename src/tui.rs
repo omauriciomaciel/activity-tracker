@@ -16,6 +16,7 @@ use std::io;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+use crate::config::Config;
 use crate::projects::ProjectStat;
 use crate::summarizer::{self, ActivityData};
 
@@ -24,6 +25,7 @@ enum ActiveTab {
     Activities,
     Summary,
     Projects,
+    Config,
 }
 
 enum SummaryState {
@@ -48,10 +50,12 @@ struct App {
     lang: String,
     projects: Option<Vec<ProjectStat>>,
     projects_days: u32,
+    config: Config,
 }
 
 impl App {
     fn new(opts: TuiOptions) -> Self {
+        let config = Config::load().unwrap_or_default();
         Self {
             date: chrono::Local::now().date_naive(),
             data: None,
@@ -66,7 +70,15 @@ impl App {
             lang: opts.lang,
             projects: None,
             projects_days: 7,
+            config,
         }
+    }
+
+    fn reload_config(&mut self) {
+        if let Ok(cfg) = Config::load() {
+            self.config = cfg;
+        }
+        self.scroll = 0;
     }
 
     fn load_data(&mut self) {
@@ -183,7 +195,11 @@ async fn event_loop(
                                 app.ensure_projects_loaded();
                                 ActiveTab::Projects
                             }
-                            ActiveTab::Projects => ActiveTab::Activities,
+                            ActiveTab::Projects => {
+                                app.reload_config();
+                                ActiveTab::Config
+                            }
+                            ActiveTab::Config => ActiveTab::Activities,
                         };
                         app.scroll = 0;
                     }
@@ -199,6 +215,16 @@ async fn event_loop(
                         app.ensure_projects_loaded();
                         app.active_tab = ActiveTab::Projects;
                         app.scroll = 0;
+                    }
+                    KeyCode::Char('4') => {
+                        app.reload_config();
+                        app.active_tab = ActiveTab::Config;
+                        app.scroll = 0;
+                    }
+
+                    // Config tab: reload
+                    KeyCode::Char('R') if app.active_tab == ActiveTab::Config => {
+                        app.reload_config();
                     }
 
                     // Projects tab: toggle week/month window
@@ -292,11 +318,12 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         format!("◄  {}  ►", app.date.format("%Y-%m-%d  %A"))
     };
 
-    let tab_names = vec!["  Atividades  ", "  Resumo  ", "  Projetos  "];
+    let tab_names = vec!["  Atividades  ", "  Resumo  ", "  Projetos  ", "  Config  "];
     let selected = match app.active_tab {
         ActiveTab::Activities => 0,
         ActiveTab::Summary => 1,
         ActiveTab::Projects => 2,
+        ActiveTab::Config => 3,
     };
 
     let tabs = Tabs::new(tab_names)
@@ -328,6 +355,7 @@ fn render_content(f: &mut Frame, app: &App, area: Rect) {
         ActiveTab::Activities => render_activities(f, app, area),
         ActiveTab::Summary => render_summary(f, app, area),
         ActiveTab::Projects => render_projects(f, app, area),
+        ActiveTab::Config => render_config(f, app, area),
     }
 }
 
@@ -606,11 +634,128 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         SummaryState::Cached(_) => "r regenerar",
         _ => "r resumo",
     };
-    let hints = if app.active_tab == ActiveTab::Projects {
-        format!(" {nav}  Tab aba  ↑↓/jk scroll  s semana  m mês  q sair ")
-    } else {
-        format!(" {nav}  Tab aba  ↑↓/jk scroll  {r_hint}  q sair ")
+    let hints = match app.active_tab {
+        ActiveTab::Projects => {
+            format!(" {nav}  Tab aba  ↑↓/jk scroll  s semana  m mês  q sair ")
+        }
+        ActiveTab::Config => " Tab aba  ↑↓/jk scroll  R recarregar  q sair ".to_string(),
+        _ => format!(" {nav}  Tab aba  ↑↓/jk scroll  {r_hint}  q sair "),
     };
     let p = Paragraph::new(hints).style(Style::default().fg(Color::DarkGray));
+    f.render_widget(p, area);
+}
+
+fn render_config(f: &mut Frame, app: &App, area: Rect) {
+    let cfg = &app.config;
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Configuração ");
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(""));
+
+    let section = |label: &str| -> Line {
+        Line::from(Span::styled(
+            format!("■ {label}"),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ))
+    };
+    let sep = || -> Line {
+        Line::from(Span::styled(
+            "─".repeat(50),
+            Style::default().fg(Color::DarkGray),
+        ))
+    };
+    let row = |key: &str, val: &str| -> Line {
+        Line::from(vec![
+            Span::styled(format!("  {key:<16}"), Style::default().fg(Color::Cyan)),
+            Span::raw(val.to_string()),
+        ])
+    };
+
+    // LLM
+    lines.push(section("LLM"));
+    lines.push(sep());
+    lines.push(row("provider", &cfg.provider));
+    lines.push(row("modelo", &cfg.model));
+    if cfg.provider == "ollama" {
+        lines.push(row("url", &cfg.ollama_url));
+    } else {
+        let key_display = cfg
+            .api_key
+            .as_deref()
+            .map(|k| {
+                let n = k.len();
+                if n <= 8 {
+                    "*".repeat(n)
+                } else {
+                    format!("{}…{}", &k[..4], &k[n - 4..])
+                }
+            })
+            .unwrap_or_else(|| "não configurado".into());
+        lines.push(row("api_key", &key_display));
+    }
+    lines.push(row("idioma", &cfg.lang));
+    lines.push(Line::from(""));
+
+    // Máquina
+    lines.push(section("MÁQUINA"));
+    lines.push(sep());
+    lines.push(row("nome", &cfg.get_machine_name()));
+    lines.push(Line::from(""));
+
+    // Integrações
+    lines.push(section("INTEGRAÇÕES"));
+    lines.push(sep());
+    let notion_status = match (&cfg.notion_token, &cfg.notion_page_id) {
+        (Some(_), Some(id)) => format!("configurado  (page: {}…)", &id[..id.len().min(8)]),
+        _ => "não configurado".into(),
+    };
+    lines.push(row("notion", &notion_status));
+    let slack_status = if cfg.slack_webhook.is_some() {
+        "configurado"
+    } else {
+        "não configurado"
+    };
+    lines.push(row("slack", slack_status));
+    lines.push(Line::from(""));
+
+    // Privacidade
+    lines.push(section("PRIVACIDADE"));
+    lines.push(sep());
+    if cfg.blocked_patterns.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  nenhum padrão bloqueado",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        lines.push(Line::from(Span::styled(
+            format!("  {} padrão(s) bloqueado(s):", cfg.blocked_patterns.len()),
+            Style::default().fg(Color::White),
+        )));
+        for p in &cfg.blocked_patterns {
+            lines.push(Line::from(vec![
+                Span::styled("    · ", Style::default().fg(Color::DarkGray)),
+                Span::styled(p.as_str(), Style::default().fg(Color::Red)),
+            ]));
+        }
+    }
+    lines.push(Line::from(""));
+
+    // Paths
+    lines.push(section("PATHS"));
+    lines.push(sep());
+    lines.push(row("logs", &crate::config::log_dir().display().to_string()));
+    lines.push(row(
+        "config",
+        &crate::config::config_path().display().to_string(),
+    ));
+
+    let p = Paragraph::new(lines)
+        .block(block)
+        .scroll((app.scroll, 0))
+        .wrap(Wrap { trim: false });
     f.render_widget(p, area);
 }
