@@ -148,6 +148,10 @@ enum Commands {
         #[arg(short, long)]
         list: bool,
 
+        /// Remove a tag com o texto fornecido
+        #[arg(short, long)]
+        delete: bool,
+
         /// Data no formato YYYY-DD-MM (padrão: hoje)
         #[arg(long)]
         date: Option<String>,
@@ -263,7 +267,7 @@ async fn main() -> Result<()> {
             println!("Coleta concluída — {entry_count} entradas salvas");
         }
 
-        Commands::Tag { label, list, date } => {
+        Commands::Tag { label, list, delete, date } => {
             let log_dir = config::log_dir();
 
             let target_date = if let Some(ref raw) = date {
@@ -275,7 +279,18 @@ async fn main() -> Result<()> {
                 None
             };
 
-            if list || label.is_none() {
+            if delete {
+                if let Some(lbl) = label {
+                    collector::delete_tag(&log_dir, &lbl, target_date)?;
+                    let when = target_date
+                        .map(|d| d.format("%Y-%m-%d").to_string())
+                        .unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
+                    println!("Tag removida em {when}: {lbl}");
+                } else {
+                    eprintln!("Erro: forneça o texto da tag para deletar. Ex: at tag --delete \"reunião\"");
+                    std::process::exit(1);
+                }
+            } else if list || label.is_none() {
                 // Listar tags do dia
                 let d = target_date.unwrap_or_else(|| chrono::Local::now().date_naive());
                 let data = summarizer::load_for_date(d)?;

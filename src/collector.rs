@@ -751,6 +751,36 @@ pub fn write_tag(log_dir: &Path, label: &str, date_opt: Option<NaiveDate>) -> Re
     Ok(())
 }
 
+pub fn delete_tag(log_dir: &Path, label: &str, date_opt: Option<NaiveDate>) -> Result<()> {
+    let date = date_opt.unwrap_or_else(|| Local::now().date_naive());
+    let path = log_dir.join(format!("{}.jsonl", date.format("%Y-%m-%d")));
+    if !path.exists() {
+        return Ok(());
+    }
+    let content = std::fs::read_to_string(&path)?;
+    let target = label.trim().to_lowercase();
+    let kept: Vec<&str> = content
+        .lines()
+        .filter(|line| {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                if v["type"] == "tag"
+                    && v["label"].as_str().map(|s| s.to_lowercase()) == Some(target.clone())
+                {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
+    let new_content = if kept.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", kept.join("\n"))
+    };
+    std::fs::write(&path, new_content)?;
+    Ok(())
+}
+
 // ─── Helpers ────────────────────────────────────
 
 fn home_dir() -> PathBuf {
