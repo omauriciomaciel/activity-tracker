@@ -453,6 +453,111 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
     })
 }
 
+fn condense_for_period(mut data: ActivityData, days: u32) -> ActivityData {
+    if days > 6 {
+        let cmd_limit = if days > 20 { 60 } else { 100 };
+        data.commands.truncate(cmd_limit);
+        data.top_apps.truncate(10);
+        data.tabs.truncate(20);
+    }
+    data
+}
+
+fn filter_by_search(data: ActivityData, query: &str) -> ActivityData {
+    let q = query.to_lowercase();
+    let commands = data
+        .commands
+        .into_iter()
+        .filter(|c| c.to_lowercase().contains(&q))
+        .collect();
+    let top_apps = data
+        .top_apps
+        .into_iter()
+        .filter(|(a, _)| a.to_lowercase().contains(&q))
+        .collect();
+    let tabs = data
+        .tabs
+        .into_iter()
+        .filter(|(t, u)| t.to_lowercase().contains(&q) || u.to_lowercase().contains(&q))
+        .collect();
+    let repos = data
+        .repos
+        .into_iter()
+        .filter_map(|(r, commits)| {
+            let repo_matches = r.to_lowercase().contains(&q);
+            let commits: Vec<String> = commits
+                .into_iter()
+                .filter(|c| c.to_lowercase().contains(&q) || repo_matches)
+                .collect();
+            if repo_matches || !commits.is_empty() {
+                Some((r, commits))
+            } else {
+                None
+            }
+        })
+        .collect();
+    ActivityData {
+        dates: data.dates,
+        commands,
+        top_apps,
+        tabs,
+        repos,
+    }
+}
+
+fn print_search_results(data: &ActivityData, query: &str) {
+    let total = data.commands.len()
+        + data.top_apps.len()
+        + data.tabs.len()
+        + data.repos.iter().map(|(_, c)| c.len()).sum::<usize>();
+    let border = "━".repeat(47);
+    println!("\n{}", border.cyan());
+    println!(
+        "  {}  {}",
+        "RESULTADOS".bold().white(),
+        format!("— \"{}\"  ({} match(es))", query, total).cyan()
+    );
+    println!("{}\n", border.cyan());
+    if !data.commands.is_empty() {
+        println!("{}", "[Comandos]".bold());
+        for cmd in &data.commands {
+            println!("  {cmd}");
+        }
+        println!();
+    }
+    if !data.top_apps.is_empty() {
+        println!("{}", "[Aplicativos]".bold());
+        for (app, _) in &data.top_apps {
+            println!("  {app}");
+        }
+        println!();
+    }
+    if !data.tabs.is_empty() {
+        println!("{}", "[Sites]".bold());
+        for (title, url) in &data.tabs {
+            if title.is_empty() || title == url {
+                println!("  {url}");
+            } else {
+                println!("  {title}");
+            }
+        }
+        println!();
+    }
+    if !data.repos.is_empty() {
+        println!("{}", "[Git]".bold());
+        for (repo, commits) in &data.repos {
+            let name = std::path::Path::new(repo)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(repo);
+            for commit in commits {
+                println!("  {name}: {commit}");
+            }
+        }
+        println!();
+    }
+}
+
 fn scrub_secrets(cmd: &str) -> String {
     const SENSITIVE: &[&str] = &[
         "password",
@@ -845,4 +950,133 @@ async fn call_gemini(
         .and_then(|c| c.content.parts.into_iter().next())
         .map(|p| p.text)
         .ok_or_else(|| anyhow::anyhow!("Gemini: resposta vazia"))
+}
+
+// ─── Export ─────────────────────────────────────────────────────────────────
+
+pub fn export_cmd(days: u32, date: Option<&str>, format: &str, output: Option<&str>) -> Result<()> {
+    let log_dir = config::log_dir();
+    let files = if let Some(raw) = date {
+        let parsed = parse_date(raw)?;
+        let path = log_dir.join(format!("{}.jsonl", parsed.format("%Y-%m-%d")));
+        if path.exists() {
+            vec![path]
+        } else {
+            eprintln!("Aviso: nenhum log para a data {raw}.");
+            return Ok(());
+        }
+    } else {
+        find_log_files(&log_dir, days)
+    };
+    if files.is_empty() {
+        eprintln!("Nenhum log encontrado.");
+        return Ok(());
+    }
+    export_raw(&files, format, output)
+}
+
+fn export_raw(files: &[PathBuf], format: &str, output: Option<&str>) -> Result<()> {
+    let mut rows: Vec<(String, &'static str, String)> = Vec::new();
+
+    for file in files {
+        let date_str = file
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("?")
+            .to_string();
+        let f = std::fs::File::open(file)?;
+        let mut seen: HashSet<String> = HashSet::new();
+        for line in std::io::BufReader::new(f)
+            .lines()
+            .map_while(Result::ok)
+            .filter(|l| !l.trim().is_empty())
+        {
+            match serde_json::from_str::<LogEntry>(&line) {
+                Ok(LogEntry::Shell { commands }) => {
+                    for cmd in commands {
+                        let cmd = cmd.trim().to_string();
+                        if cmd.is_empty() || is_noise_command(&cmd) {
+                            continue;
+                        }
+                        if seen.insert(format!("s:{cmd}")) {
+                            rows.push((date_str.clone(), "shell", cmd));
+                        }
+                    }
+                }
+                Ok(LogEntry::Apps { windows }) => {
+                    for w in windows {
+                        let w = strip_hostname_prefix(w.trim()).to_string();
+                        if w.is_empty() {
+                            continue;
+                        }
+                        if seen.insert(format!("a:{w}")) {
+                            rows.push((date_str.clone(), "app", w));
+                        }
+                    }
+                }
+                Ok(LogEntry::ChromeTabs { tabs }) => {
+                    for t in tabs {
+                        let url = t.url.trim().to_string();
+                        if url.is_empty() {
+                            continue;
+                        }
+                        if seen.insert(format!("t:{url}")) {
+                            let content = if t.title.trim().is_empty() || t.title.trim() == url {
+                                url
+                            } else {
+                                format!("{} | {}", t.title.trim(), t.url.trim())
+                            };
+                            rows.push((date_str.clone(), "tab", content));
+                        }
+                    }
+                }
+                Ok(LogEntry::Context { data }) => {
+                    for r in data.git_repos {
+                        let repo = r.repo.clone();
+                        let commits: Vec<String> = if !r.commits.is_empty() {
+                            r.commits
+                        } else if !r.last_commit.is_empty() {
+                            vec![r.last_commit]
+                        } else {
+                            continue;
+                        };
+                        for c in commits {
+                            let content = format!("{repo} | {c}");
+                            if seen.insert(format!("g:{content}")) {
+                                rows.push((date_str.clone(), "git", content));
+                            }
+                        }
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+    }
+
+    let out = match format {
+        "json" => {
+            let arr: Vec<serde_json::Value> = rows
+                .iter()
+                .map(|(d, t, c)| serde_json::json!({"date": d, "type": t, "content": c}))
+                .collect();
+            serde_json::to_string_pretty(&arr)?
+        }
+        _ => {
+            let mut s = String::from("date,type,content\n");
+            for (date, typ, content) in &rows {
+                let escaped = content.replace('"', "\"\"");
+                s.push_str(&format!("{date},{typ},\"{escaped}\"\n"));
+            }
+            s
+        }
+    };
+
+    match output {
+        Some(path) => {
+            std::fs::write(path, &out)?;
+            eprintln!("{} {}", "Exportado:".green(), path);
+        }
+        None => print!("{out}"),
+    }
+    Ok(())
 }

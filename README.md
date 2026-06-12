@@ -68,9 +68,15 @@ at collect
 ats
 ats --days 7
 ats --today                  # atalho para o dia de hoje
+ats --week                   # atalho para --days 7
+ats --month                  # atalho para --days 30
 ats --model gpt-4o-mini
 ats --lang en
 ats --verbose                # exibe dados brutos antes do resumo
+
+# Busca por termo nos logs antes de resumir
+ats --search docker           # filtra tudo que contém "docker" e resume
+ats --search "cargo build"
 
 # Resumo de uma data específica (formato YYYY-DD-MM)
 ats --date 2026-06-06
@@ -81,6 +87,13 @@ ats --provider groq --model llama-3.1-8b-instant
 
 # Enviar resumo ao Notion
 ats --today --send-notion
+
+# Exportar logs em CSV ou JSON
+at export                    # hoje em CSV (stdout)
+at export --days 7           # últimos 7 dias
+at export --format json      # formato JSON
+at export --days 7 -o semana.csv  # salvar em arquivo
+at export --date 2026-06-10  # data específica
 
 # Configuração persistente
 at config set-provider ollama       # ollama | openai | anthropic | groq | gemini | openrouter

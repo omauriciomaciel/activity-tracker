@@ -73,6 +73,18 @@ enum Commands {
         #[arg(long)]
         today: bool,
 
+        /// Resumir os últimos 7 dias (atalho para --days 7)
+        #[arg(long)]
+        week: bool,
+
+        /// Resumir os últimos 30 dias (atalho para --days 30)
+        #[arg(long)]
+        month: bool,
+
+        /// Filtrar logs pelo termo antes de resumir (ex: --search docker)
+        #[arg(long)]
+        search: Option<String>,
+
         /// Enviar resumo ao Notion após gerar
         #[arg(long)]
         send_notion: bool,
@@ -80,6 +92,25 @@ enum Commands {
         /// Mostrar dados brutos
         #[arg(long)]
         verbose: bool,
+    },
+
+    /// Exporta logs de atividade em CSV ou JSON
+    Export {
+        /// Número de dias para exportar
+        #[arg(short, long, default_value = "1")]
+        days: u32,
+
+        /// Data específica no formato YYYY-DD-MM (ex: 2026-08-06)
+        #[arg(long)]
+        date: Option<String>,
+
+        /// Formato de saída: csv, json
+        #[arg(long, default_value = "csv")]
+        format: String,
+
+        /// Arquivo de saída (padrão: stdout)
+        #[arg(short, long)]
+        output: Option<String>,
     },
 
     /// Remove entradas fora da data de cada arquivo de log
@@ -178,6 +209,15 @@ async fn main() -> Result<()> {
             updater::run()?;
         }
 
+        Commands::Export {
+            days,
+            date,
+            format,
+            output,
+        } => {
+            summarizer::export_cmd(days, date.as_deref(), &format, output.as_deref())?;
+        }
+
         Commands::Summary {
             mut days,
             mut date,
@@ -187,11 +227,20 @@ async fn main() -> Result<()> {
             api_key,
             lang,
             today,
+            week,
+            month,
+            search,
             send_notion,
             verbose,
         } => {
             if today {
                 days = 1;
+                date = None;
+            } else if week {
+                days = 7;
+                date = None;
+            } else if month {
+                days = 30;
                 date = None;
             }
             let model = model.unwrap_or_else(|| cfg.model.clone());
@@ -225,6 +274,7 @@ async fn main() -> Result<()> {
                 machine_name: &machine,
                 notion: notion.as_ref().map(|(t, p)| (t.as_str(), p.as_str())),
                 verbose,
+                search: search.as_deref(),
             })
             .await?;
         }
