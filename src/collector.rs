@@ -22,6 +22,9 @@ enum Entry {
 
     #[serde(rename = "context")]
     Context { ts: String, data: ContextData },
+
+    #[serde(rename = "tag")]
+    Tag { ts: String, label: String },
 }
 
 #[derive(Serialize)]
@@ -705,6 +708,47 @@ fn clean_log_file(path: &Path, date: NaiveDate) -> Result<usize> {
     let new_content = out_lines.join("\n") + if out_lines.is_empty() { "" } else { "\n" };
     std::fs::write(path, new_content)?;
     Ok(removed)
+}
+
+// ─── Tags manuais ────────────────────────────────
+
+/// Escreve uma entrada de tag manual no JSONL do dia (ou de uma data específica).
+pub fn write_tag(log_dir: &Path, label: &str, date_opt: Option<NaiveDate>) -> Result<()> {
+    std::fs::create_dir_all(log_dir)?;
+
+    let (date, ts) = if let Some(d) = date_opt {
+        let ts = format!("{}T00:00:00", d.format("%Y-%m-%d"));
+        (d.format("%Y-%m-%d").to_string(), ts)
+    } else {
+        let now = Local::now();
+        (
+            now.format("%Y-%m-%d").to_string(),
+            now.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        )
+    };
+
+    let log_file = log_dir.join(format!("{date}.jsonl"));
+
+    let entry = Entry::Tag {
+        ts,
+        label: label.trim().to_string(),
+    };
+
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&log_file, std::fs::Permissions::from_mode(0o600));
+    }
+
+    use std::io::Write;
+    let json = serde_json::to_string(&entry)?;
+    writeln!(file, "{json}")?;
+
+    Ok(())
 }
 
 // ─── Helpers ────────────────────────────────────

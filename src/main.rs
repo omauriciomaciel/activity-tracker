@@ -8,7 +8,7 @@ mod summarizer;
 mod tui;
 mod updater;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -139,6 +139,20 @@ enum Commands {
         lang: Option<String>,
     },
 
+    /// Adiciona uma anotação manual ao log do dia (ex: "reunião de planning")
+    Tag {
+        /// Texto da anotação (se omitido, lista as tags do dia)
+        label: Option<String>,
+
+        /// Lista as tags em vez de adicionar
+        #[arg(short, long)]
+        list: bool,
+
+        /// Data no formato YYYY-DD-MM (padrão: hoje)
+        #[arg(long)]
+        date: Option<String>,
+    },
+
     /// Remove entradas fora da data de cada arquivo de log
     CleanLogs,
 
@@ -240,6 +254,39 @@ async fn main() -> Result<()> {
             let log_dir = config::log_dir();
             let entry_count = collector::collect_all(&log_dir, &cfg.blocked_patterns)?;
             println!("Coleta concluída — {entry_count} entradas salvas");
+        }
+
+        Commands::Tag { label, list, date } => {
+            let log_dir = config::log_dir();
+
+            let target_date = if let Some(ref raw) = date {
+                Some(
+                    chrono::NaiveDate::parse_from_str(raw, "%Y-%d-%m")
+                        .with_context(|| format!("Data inválida: '{raw}'. Use YYYY-DD-MM (ex: 2026-08-06)"))?,
+                )
+            } else {
+                None
+            };
+
+            if list || label.is_none() {
+                // Listar tags do dia
+                let d = target_date.unwrap_or_else(|| chrono::Local::now().date_naive());
+                let data = summarizer::load_for_date(d)?;
+                if data.tags.is_empty() {
+                    println!("Nenhuma tag para {}.", d.format("%Y-%m-%d"));
+                } else {
+                    println!("Tags para {}:", d.format("%Y-%m-%d"));
+                    for (hour, lbl) in &data.tags {
+                        println!("  {hour}  {lbl}");
+                    }
+                }
+            } else if let Some(lbl) = label {
+                collector::write_tag(&log_dir, &lbl, target_date)?;
+                let when = target_date
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
+                println!("Tag adicionada em {when}: {lbl}");
+            }
         }
 
         Commands::CleanLogs => {

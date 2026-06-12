@@ -126,11 +126,13 @@ impl App {
             top_apps: vec![],
             tabs: vec![],
             repos: vec![],
+            tags: vec![],
         });
         let has_data = !d.commands.is_empty()
             || !d.top_apps.is_empty()
             || !d.tabs.is_empty()
-            || !d.repos.is_empty();
+            || !d.repos.is_empty()
+            || !d.tags.is_empty();
         self.data = if has_data { Some(d) } else { None };
         self.scroll = 0;
         self.summary = match summarizer::load_summary(self.date) {
@@ -621,6 +623,26 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
                 ]));
             }
         }
+    }
+
+    if !data.tags.is_empty() {
+        lines.push(Line::from(Span::styled(
+            format!("■ NOTAS  ({} evento(s))", data.tags.len()),
+            Style::default()
+                .fg(Color::LightRed)
+                .add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(Span::styled(
+            "─".repeat(60),
+            Style::default().fg(Color::DarkGray),
+        )));
+        for (hour, label) in &data.tags {
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {hour}  "), Style::default().fg(Color::DarkGray)),
+                Span::raw(label.as_str()),
+            ]));
+        }
+        lines.push(Line::from(""));
     }
 
     let p = Paragraph::new(lines)

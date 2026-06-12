@@ -20,6 +20,8 @@ enum LogEntry {
     ChromeTabs { tabs: Vec<TabEntry> },
     #[serde(rename = "context")]
     Context { data: CtxData },
+    #[serde(rename = "tag")]
+    Tag { ts: String, label: String },
 }
 
 #[derive(Deserialize)]
@@ -54,6 +56,7 @@ pub struct ActivityData {
     pub top_apps: Vec<(String, u32)>,
     pub tabs: Vec<(String, String)>,       // (title, url)
     pub repos: Vec<(String, Vec<String>)>, // (path, commits)
+    pub tags: Vec<(String, String)>,       // (ts_hora, label)
 }
 
 // ─── Structs de API ──────────────────────────────
@@ -238,7 +241,8 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
         let empty = filtered.commands.is_empty()
             && filtered.top_apps.is_empty()
             && filtered.tabs.is_empty()
-            && filtered.repos.is_empty();
+            && filtered.repos.is_empty()
+            && filtered.tags.is_empty();
         if empty {
             println!("{}", "Nenhum resultado encontrado.".yellow());
             return Ok(());
@@ -379,6 +383,7 @@ pub fn load_for_date(date: chrono::NaiveDate) -> Result<ActivityData> {
             top_apps: vec![],
             tabs: vec![],
             repos: vec![],
+            tags: vec![],
         });
     }
     aggregate(&[path])
@@ -423,6 +428,7 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
     let mut tabs: Vec<(String, String)> = Vec::new();
     let mut repo_map: HashMap<String, Vec<String>> = HashMap::new();
     let mut dates: Vec<String> = Vec::new();
+    let mut tags: Vec<(String, String)> = Vec::new();
 
     for file in files {
         let date_str = file
@@ -469,6 +475,10 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
                             tabs.push((tab.title.trim().to_string(), url));
                         }
                     }
+                }
+                Ok(LogEntry::Tag { ts, label }) => {
+                    let hour = ts.get(11..16).unwrap_or(&ts).to_string();
+                    tags.push((hour, label));
                 }
                 Ok(LogEntry::Context { data }) => {
                     for r in data.git_repos {
@@ -519,12 +529,16 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
         latest_b.cmp(latest_a)
     });
 
+    // Tags: sort por hora, sem deduplicação (dois eventos iguais são válidos)
+    tags.sort_by(|a, b| a.0.cmp(&b.0));
+
     Ok(ActivityData {
         dates,
         commands: commands.into_iter().take(150).collect(),
         top_apps,
         tabs,
         repos,
+        tags,
     })
 }
 
@@ -571,12 +585,18 @@ fn filter_by_search(data: ActivityData, query: &str) -> ActivityData {
             }
         })
         .collect();
+    let tags = data
+        .tags
+        .into_iter()
+        .filter(|(_, label)| label.to_lowercase().contains(&q))
+        .collect();
     ActivityData {
         dates: data.dates,
         commands,
         top_apps,
         tabs,
         repos,
+        tags,
     }
 }
 
@@ -709,6 +729,14 @@ pub(crate) fn build_context(data: &ActivityData) -> String {
     let mut out = String::new();
 
     out.push_str(&format!("Período: {}\n\n", data.dates.join(", ")));
+
+    if !data.tags.is_empty() {
+        out.push_str("=== NOTAS E EVENTOS ===\n");
+        for (hour, label) in &data.tags {
+            out.push_str(&format!("  {hour} - {label}\n"));
+        }
+        out.push('\n');
+    }
 
     if !data.commands.is_empty() {
         out.push_str("=== COMANDOS DO TERMINAL ===\n");
@@ -1135,6 +1163,11 @@ fn export_raw(files: &[PathBuf], format: &str, output: Option<&str>) -> Result<(
                                 rows.push((date_str.clone(), "git", content));
                             }
                         }
+                    }
+                }
+                Ok(LogEntry::Tag { label, .. }) => {
+                    if seen.insert(format!("n:{label}")) {
+                        rows.push((date_str.clone(), "tag", label));
                     }
                 }
                 Err(_) => {}

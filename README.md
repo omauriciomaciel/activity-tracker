@@ -102,6 +102,13 @@ ats --week --send-notion --send-slack
 at tui                       # abre a interface, hoje como data inicial
 at tui --provider openai --model gpt-4o-mini
 
+# Anotações manuais
+at tag "reunião de planning"     # adiciona nota ao log de hoje
+at tag "revisão de código"
+at tag                           # lista as notas de hoje
+at tag --list --date 2026-10-06  # lista notas de data específica
+at tag "sprint planning" --date 2026-10-06  # nota em data específica
+
 # Exportar logs em CSV ou JSON
 at export                    # hoje em CSV (stdout)
 at export --days 7           # últimos 7 dias
