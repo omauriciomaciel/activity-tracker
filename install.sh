@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
 REPO="omauriciomaciel/activity-tracker"
 BINARY="activity-tracker"
@@ -10,9 +10,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-info()  { echo -e "${GREEN}[ok]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[!]${NC} $*"; }
-error() { echo -e "${RED}[erro]${NC} $*" >&2; exit 1; }
+info()  { printf "${GREEN}[ok]${NC} %s\n" "$*"; }
+warn()  { printf "${YELLOW}[!]${NC} %s\n" "$*"; }
+error() { printf "${RED}[erro]${NC} %s\n" "$*" >&2; exit 1; }
 
 echo "=== Activity Tracker Installer ==="
 echo
@@ -38,9 +38,9 @@ info "Plataforma: $OS_NAME / $ARCH_NAME"
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 
-command -v curl &>/dev/null || error "curl não encontrado"
+command -v curl >/dev/null 2>&1 || error "curl não encontrado"
 
-if command -v ollama &>/dev/null; then
+if command -v ollama >/dev/null 2>&1; then
     info "Ollama $(ollama --version 2>/dev/null || echo 'instalado')"
 else
     warn "Ollama não encontrado — provider padrão não funcionará sem ele"
@@ -55,12 +55,13 @@ LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
     | grep '"tag_name"' \
     | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 
-[[ -n "$LATEST_TAG" ]] || error "Não foi possível obter a versão mais recente do GitHub"
+[ -n "$LATEST_TAG" ] || error "Não foi possível obter a versão mais recente do GitHub"
 info "Versão: $LATEST_TAG"
 
 # ── Download binary ───────────────────────────────────────────────────────────
 
-VERSION="${LATEST_TAG#v}"
+# Strip leading 'v' from tag
+VERSION=$(echo "$LATEST_TAG" | sed 's/^v//')
 TARBALL="activity-tracker-${VERSION}-${OS_NAME}-${ARCH_NAME}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${TARBALL}"
 
@@ -82,17 +83,20 @@ info "Binário instalado em $INSTALL_DIR/$BINARY"
 
 # ── PATH check ────────────────────────────────────────────────────────────────
 
-if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-    warn "$INSTALL_DIR não está no PATH"
-    echo
-    echo "  Adicione ao seu shell:"
-    echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
-    echo
-fi
+case ":$PATH:" in
+    *":$INSTALL_DIR:"*) ;;
+    *)
+        warn "$INSTALL_DIR não está no PATH"
+        echo
+        echo "  Adicione ao seu shell:"
+        echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo
+        ;;
+esac
 
 # ── Autostart (launchd no macOS, systemd no Linux) ────────────────────────────
 
-if [[ "$OS" == "Darwin" ]]; then
+if [ "$OS" = "Darwin" ]; then
     echo
     echo "Configurando autostart via launchd (macOS)..."
 
@@ -153,11 +157,11 @@ PLIST_END
         echo "  Abrindo System Settings → Full Disk Access..."
         open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" 2>/dev/null || true
         echo "  Pressione Enter quando conceder Full Disk Access..."
-        read -r
+        read -r _
         echo "  Abrindo System Settings → Accessibility..."
         open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
         echo "  Pressione Enter quando conceder Accessibility..."
-        read -r
+        read -r _
         info "Permissões configuradas"
     else
         echo
@@ -166,7 +170,7 @@ PLIST_END
         warn "  System Settings → Privacy → Accessibility   → adicionar $INSTALL_DIR/$BINARY"
     fi
 
-elif command -v systemctl &>/dev/null; then
+elif command -v systemctl >/dev/null 2>&1; then
     echo
     echo "Configurando autostart via systemd..."
 
@@ -209,18 +213,18 @@ fi
 # ── Shell aliases ─────────────────────────────────────────────────────────────
 
 SHELL_RC=""
-if [[ -f "$HOME/.zshrc" ]]; then
+if [ -f "$HOME/.zshrc" ]; then
     SHELL_RC="$HOME/.zshrc"
-elif [[ -f "$HOME/.bashrc" ]]; then
+elif [ -f "$HOME/.bashrc" ]; then
     SHELL_RC="$HOME/.bashrc"
-elif [[ -f "$HOME/.bash_profile" ]]; then
+elif [ -f "$HOME/.bash_profile" ]; then
     SHELL_RC="$HOME/.bash_profile"
 fi
 
 ALIAS_AT="alias at='activity-tracker'"
 ALIAS_ATS="alias ats='activity-tracker summary'"
 
-if [[ -n "$SHELL_RC" ]]; then
+if [ -n "$SHELL_RC" ]; then
     if grep -q "alias at=" "$SHELL_RC" 2>/dev/null; then
         warn "Alias 'at' já existe em $SHELL_RC — pulando"
     else
