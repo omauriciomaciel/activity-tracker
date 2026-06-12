@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-06-12)
+
+### Chores
+
+- **ci**: Automatiza build e release com semantic-release
+  ([`8b2bb91`](https://github.com/omauriciomaciel/activity-tracker/commit/8b2bb916a6b3c6af7020e1a1d06d3ef3d25325f2))
+
+### Features
+
+- **summarizer**: Adiciona suporte a múltiplos providers de LLM
+  ([`6b8e775`](https://github.com/omauriciomaciel/activity-tracker/commit/6b8e775e8a2de15ed8fdfe5c92ed4d8381500066))
+
+
 ## v1.3.0 (2026-06-12)
 
 ### Features
