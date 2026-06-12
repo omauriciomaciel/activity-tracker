@@ -1,8 +1,8 @@
 mod collector;
 mod config;
 mod daemon;
-mod summarizer;
 mod notion;
+mod summarizer;
 mod updater;
 
 use anyhow::Result;
@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "activity-tracker")]
-#[command(about = "Captura atividades e resume com Ollama — tudo em Rust")]
+#[command(about = "Captura atividades e resume com LLM — tudo em Rust")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -39,7 +39,7 @@ enum Commands {
     /// Executa uma única coleta manual
     Collect,
 
-    /// Gera um resumo das atividades recentes via Ollama
+    /// Gera um resumo das atividades recentes via LLM
     Summary {
         /// Quantos dias para trás resumir (ignorado se --date for usado)
         #[arg(short, long, default_value = "3")]
@@ -49,13 +49,21 @@ enum Commands {
         #[arg(long)]
         date: Option<String>,
 
-        /// Modelo do Ollama (sobrescreve o padrão salvo)
+        /// Modelo a usar (sobrescreve o padrão salvo)
         #[arg(short, long)]
         model: Option<String>,
 
-        /// URL do Ollama
+        /// Provider de LLM: ollama, openai, anthropic, groq, gemini, openrouter
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// URL do Ollama (apenas para provider=ollama)
         #[arg(long)]
         ollama_url: Option<String>,
+
+        /// API key do provider (sobrescreve o padrão salvo)
+        #[arg(long)]
+        api_key: Option<String>,
 
         /// Idioma do resumo
         #[arg(long)]
@@ -89,15 +97,25 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum ConfigAction {
-    /// Define o modelo padrão do Ollama
+    /// Define o modelo padrão
     SetModel {
-        /// Nome do modelo (ex: llama3.1, mistral, gemma2)
+        /// Nome do modelo (ex: llama3.1, gpt-4o-mini, claude-haiku-4-5-20251001)
+        name: String,
+    },
+    /// Define o provider de LLM padrão
+    SetProvider {
+        /// Provider: ollama, openai, anthropic, groq, gemini, openrouter
         name: String,
     },
     /// Define a URL padrão do Ollama
     SetUrl {
         /// URL (ex: http://localhost:11434)
         url: String,
+    },
+    /// Define a API key para providers cloud (OpenAI, Anthropic, Groq, Gemini, OpenRouter)
+    SetApiKey {
+        /// API key do provider
+        key: String,
     },
     /// Define o idioma padrão do resumo
     SetLang {
@@ -164,7 +182,9 @@ async fn main() -> Result<()> {
             mut days,
             mut date,
             model,
+            provider,
             ollama_url,
+            api_key,
             lang,
             today,
             send_notion,
@@ -175,7 +195,9 @@ async fn main() -> Result<()> {
                 date = None;
             }
             let model = model.unwrap_or_else(|| cfg.model.clone());
+            let provider = provider.unwrap_or_else(|| cfg.provider.clone());
             let url = ollama_url.unwrap_or_else(|| cfg.ollama_url.clone());
+            let api_key = api_key.or_else(|| cfg.api_key.clone());
             let lang = lang.unwrap_or_else(|| cfg.lang.clone());
             let notion = if send_notion {
                 match (&cfg.notion_token, &cfg.notion_page_id) {
@@ -191,17 +213,20 @@ async fn main() -> Result<()> {
                 None
             };
 
-let machine = cfg.get_machine_name();
+            let machine = cfg.get_machine_name();
             summarizer::run(summarizer::RunOptions {
                 days,
                 date: date.as_deref(),
                 model: &model,
+                provider: &provider,
                 ollama_url: &url,
+                api_key: api_key.as_deref(),
                 lang: &lang,
                 machine_name: &machine,
                 notion: notion.as_ref().map(|(t, p)| (t.as_str(), p.as_str())),
                 verbose,
-            }).await?;
+            })
+            .await?;
         }
 
         Commands::Config { action } => match action {
@@ -210,10 +235,33 @@ let machine = cfg.get_machine_name();
                 cfg.save()?;
                 println!("Modelo padrão: {name}");
             }
+            ConfigAction::SetProvider { name } => {
+                let valid = [
+                    "ollama",
+                    "openai",
+                    "anthropic",
+                    "groq",
+                    "gemini",
+                    "openrouter",
+                ];
+                if !valid.contains(&name.as_str()) {
+                    eprintln!("Provider inválido: {name}");
+                    eprintln!("Providers suportados: {}", valid.join(", "));
+                    std::process::exit(1);
+                }
+                cfg.provider = name.clone();
+                cfg.save()?;
+                println!("Provider: {name}");
+            }
             ConfigAction::SetUrl { url } => {
                 cfg.ollama_url = url.clone();
                 cfg.save()?;
                 println!("URL do Ollama: {url}");
+            }
+            ConfigAction::SetApiKey { key } => {
+                cfg.api_key = Some(key);
+                cfg.save()?;
+                println!("API key salva");
             }
             ConfigAction::SetLang { lang } => {
                 cfg.lang = lang.clone();

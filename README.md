@@ -1,6 +1,6 @@
 # Activity Tracker
 
-Daemon em Rust que captura atividades do sistema (terminal, janelas abertas, abas do Chrome/Brave, repositórios Git) e gera resumos inteligentes via [Ollama](https://ollama.com). Opcionalmente envia o resumo como nota para o [Notion](https://notion.so).
+Daemon em Rust que captura atividades do sistema (terminal, janelas abertas, abas do Chrome/Brave, repositórios Git) e gera resumos inteligentes via LLM. Suporta Ollama (local), OpenAI, Anthropic, Groq, Gemini e OpenRouter. Opcionalmente envia o resumo como nota para o [Notion](https://notion.so).
 
 ## Instalação
 
@@ -22,8 +22,27 @@ cargo build --release
 
 **Pré-requisitos:**
 - **Rust/Cargo** — [rustup.rs](https://rustup.rs)
-- **Ollama** — `ollama serve` + `ollama pull llama3.1`
+- **LLM** — Ollama local (`ollama serve`) ou API key de um provider cloud
 - Opcional: `wmctrl` para captura de janelas X11 (`sudo apt install wmctrl`)
+
+## Providers de LLM
+
+| Provider | Modelos exemplo | Requer |
+|---|---|---|
+| `ollama` | llama3.1, mistral, gemma2 | Ollama rodando localmente |
+| `openai` | gpt-4o, gpt-4o-mini | API key OpenAI |
+| `anthropic` | claude-sonnet-4-6, claude-haiku-4-5-20251001 | API key Anthropic |
+| `groq` | llama-3.1-8b-instant, mixtral-8x7b | API key Groq |
+| `gemini` | gemini-2.0-flash, gemini-1.5-pro | API key Google |
+| `openrouter` | qualquer modelo disponível | API key OpenRouter |
+
+O padrão é `ollama`. Para usar outro provider:
+
+```bash
+activity-tracker config set-provider openai
+activity-tracker config set-api-key sk-...
+activity-tracker config set-model gpt-4o-mini
+```
 
 ## Uso
 
@@ -41,20 +60,26 @@ activity-tracker collect
 activity-tracker summary
 activity-tracker summary --days 7
 activity-tracker summary --today           # atalho para o dia de hoje
-activity-tracker summary --model mistral
+activity-tracker summary --model gpt-4o-mini
 activity-tracker summary --lang en
 activity-tracker summary --verbose         # exibe dados brutos antes do resumo
 
 # Resumo de uma data específica (formato YYYY-DD-MM)
 activity-tracker summary --date 2026-06-06
 
+# Override de provider por sessão (sem alterar config)
+activity-tracker summary --provider anthropic --api-key sk-ant-... --model claude-haiku-4-5-20251001
+activity-tracker summary --provider groq --model llama-3.1-8b-instant
+
 # Enviar resumo ao Notion
 activity-tracker summary --today --send-notion
 
 # Configuração persistente
+activity-tracker config set-provider ollama       # ollama | openai | anthropic | groq | gemini | openrouter
 activity-tracker config set-model llama3.1
-activity-tracker config set-url http://localhost:11434
-activity-tracker config set-lang pt-br         # pt-br | en | es
+activity-tracker config set-api-key <key>         # API key para providers cloud
+activity-tracker config set-url http://localhost:11434  # URL do Ollama (provider=ollama)
+activity-tracker config set-lang pt-br            # pt-br | en | es
 activity-tracker config set-notion-token secret_xxx
 activity-tracker config set-notion-page <page_id>
 activity-tracker config set-machine-name "MacBook Pro"  # opcional, usa hostname se omitido
@@ -139,12 +164,14 @@ Cada linha do `.jsonl` é uma entrada tipada (`shell`, `apps`, `chrome_tabs` ou 
 ## Configuração padrão
 
 ```toml
+provider   = "ollama"
 model      = "llama3.1"
 ollama_url = "http://localhost:11434"
 lang       = "pt-br"
-# notion_token    = "secret_xxx"   # opcional
-# notion_page_id  = "abc123..."    # opcional
-# machine_name    = "MacBook Pro"  # opcional, padrão: hostname do sistema
+# api_key         = "sk-..."         # opcional, para providers cloud
+# notion_token    = "secret_xxx"     # opcional
+# notion_page_id  = "abc123..."      # opcional
+# machine_name    = "MacBook Pro"    # opcional, padrão: hostname do sistema
 ```
 
 ## Resumo gerado

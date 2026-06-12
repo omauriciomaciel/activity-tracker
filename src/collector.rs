@@ -145,7 +145,10 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
             } else {
                 (
                     String::new(),
-                    line.split_once(';').map(|x| x.1).unwrap_or(&line).to_string(),
+                    line.split_once(';')
+                        .map(|x| x.1)
+                        .unwrap_or(&line)
+                        .to_string(),
                 )
             };
 
@@ -154,13 +157,13 @@ fn capture_shell_history(log_dir: &Path, ts: &str) -> Result<Entry> {
             }
 
             if !ts_secs.is_empty()
-                && let Ok(secs) = ts_secs.parse::<i64>() {
-                    let cmd_date =
-                        chrono::DateTime::from_timestamp(secs, 0).map(|dt| dt.date_naive());
-                    if cmd_date.map(|d| d != today).unwrap_or(false) {
-                        continue;
-                    }
+                && let Ok(secs) = ts_secs.parse::<i64>()
+            {
+                let cmd_date = chrono::DateTime::from_timestamp(secs, 0).map(|dt| dt.date_naive());
+                if cmd_date.map(|d| d != today).unwrap_or(false) {
+                    continue;
                 }
+            }
 
             let first = cmd.split_whitespace().next().unwrap_or("");
             if !first.is_empty() && !trivial.contains(first) {
@@ -279,47 +282,49 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
 
     // Tentar wmctrl (X11)
     if let Ok(out) = Command::new("wmctrl").args(["-l"]).output()
-        && out.status.success() {
-            for line in out.stdout.lines().map_while(Result::ok) {
-                // Formato: 0x... desktop_num host título_da_janela
-                let parts: Vec<&str> = line.splitn(4, char::is_whitespace).collect();
-                if parts.len() >= 4 {
-                    let raw_title = parts[3..].join(" ");
-                    // Remover prefixo de hostname que wmctrl inclui
-                    let hostname = parts[2]; // 3ª coluna é o hostname
-                    let title = raw_title
-                        .trim()
-                        .strip_prefix(hostname)
-                        .unwrap_or(raw_title.trim())
-                        .trim()
-                        .to_string();
-                    if !title.is_empty() {
-                        windows.push(title);
-                    }
+        && out.status.success()
+    {
+        for line in out.stdout.lines().map_while(Result::ok) {
+            // Formato: 0x... desktop_num host título_da_janela
+            let parts: Vec<&str> = line.splitn(4, char::is_whitespace).collect();
+            if parts.len() >= 4 {
+                let raw_title = parts[3..].join(" ");
+                // Remover prefixo de hostname que wmctrl inclui
+                let hostname = parts[2]; // 3ª coluna é o hostname
+                let title = raw_title
+                    .trim()
+                    .strip_prefix(hostname)
+                    .unwrap_or(raw_title.trim())
+                    .trim()
+                    .to_string();
+                if !title.is_empty() {
+                    windows.push(title);
                 }
             }
         }
+    }
 
     // Fallback: xdotool
     if windows.is_empty()
         && let Ok(out) = Command::new("xdotool")
             .args(["search", "--onlyvisible", "--name", ""])
             .output()
-            && out.status.success() {
-                for line in out.stdout.lines().map_while(Result::ok) {
-                    if let Ok(wid) = line.trim().parse::<u64>()
-                        && let Ok(name_out) = Command::new("xdotool")
-                            .args(["getwindowname", &wid.to_string()])
-                            .output()
-                        {
-                            let name = String::from_utf8_lossy(&name_out.stdout).trim().to_string();
-                            if !name.is_empty() {
-                                windows.push(name);
-                            }
-                        }
+        && out.status.success()
+    {
+        for line in out.stdout.lines().map_while(Result::ok) {
+            if let Ok(wid) = line.trim().parse::<u64>()
+                && let Ok(name_out) = Command::new("xdotool")
+                    .args(["getwindowname", &wid.to_string()])
+                    .output()
+            {
+                let name = String::from_utf8_lossy(&name_out.stdout).trim().to_string();
+                if !name.is_empty() {
+                    windows.push(name);
                 }
-                windows.truncate(30);
             }
+        }
+        windows.truncate(30);
+    }
 
     // Fallback macOS
     if windows.is_empty() && cfg!(target_os = "macos")
@@ -340,47 +345,49 @@ fn capture_open_windows(ts: &str) -> Result<Entry> {
             }
 
     // Último recurso: /proc no Linux
-    if windows.is_empty() && cfg!(target_os = "linux")
-        && let Ok(out) = Command::new("ps").args(["axo", "comm"]).output() {
-            let gui_hints: HashSet<&str> = [
-                "code",
-                "firefox",
-                "chrome",
-                "chromium",
-                "brave",
-                "slack",
-                "discord",
-                "spotify",
-                "telegram",
-                "nautilus",
-                "thunar",
-                "alacritty",
-                "kitty",
-                "wezterm",
-                "gnome-terminal",
-                "konsole",
-                "tilix",
-                "obs",
-                "gimp",
-                "inkscape",
-                "blender",
-                "libreoffice",
-                "thunderbird",
-                "signal",
-                "vlc",
-                "mpv",
-            ]
-            .into_iter()
-            .collect();
+    if windows.is_empty()
+        && cfg!(target_os = "linux")
+        && let Ok(out) = Command::new("ps").args(["axo", "comm"]).output()
+    {
+        let gui_hints: HashSet<&str> = [
+            "code",
+            "firefox",
+            "chrome",
+            "chromium",
+            "brave",
+            "slack",
+            "discord",
+            "spotify",
+            "telegram",
+            "nautilus",
+            "thunar",
+            "alacritty",
+            "kitty",
+            "wezterm",
+            "gnome-terminal",
+            "konsole",
+            "tilix",
+            "obs",
+            "gimp",
+            "inkscape",
+            "blender",
+            "libreoffice",
+            "thunderbird",
+            "signal",
+            "vlc",
+            "mpv",
+        ]
+        .into_iter()
+        .collect();
 
-            let mut seen = HashSet::new();
-            for line in out.stdout.lines().map_while(Result::ok) {
-                let name = line.trim().to_string();
-                if gui_hints.contains(name.as_str()) && seen.insert(name.clone()) {
-                    windows.push(name);
-                }
+        let mut seen = HashSet::new();
+        for line in out.stdout.lines().map_while(Result::ok) {
+            let name = line.trim().to_string();
+            if gui_hints.contains(name.as_str()) && seen.insert(name.clone()) {
+                windows.push(name);
             }
         }
+    }
 
     Ok(Entry::Apps {
         ts: ts.to_string(),
@@ -513,7 +520,7 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
     // find -maxdepth 4 -name .git
     if let Ok(out) = Command::new("find")
         .args([
-            "-P",  // never follow symlinks
+            "-P", // never follow symlinks
             home.to_str().unwrap_or("."),
             "-maxdepth",
             "4",
