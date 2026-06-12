@@ -133,6 +133,11 @@ jobs:
            git context, then summarises the day with a local Ollama model.
           CTRL
 
+          mkdir -p "${PKGNAME}/etc/profile.d"
+          printf "alias at='activity-tracker'\nalias ats='activity-tracker summary'\n" \
+            > "${PKGNAME}/etc/profile.d/activity-tracker.sh"
+          chmod 644 "${PKGNAME}/etc/profile.d/activity-tracker.sh"
+
           fakeroot dpkg-deb --build "${PKGNAME}"
 
       - name: Package Linux .tar.gz

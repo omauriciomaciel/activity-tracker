@@ -177,16 +177,49 @@ else
 fi
 
 
+# ── Aliases ─────────────────────────────────────────────────────────────────
+
+SHELL_RC=""
+if [[ -f "$HOME/.zshrc" ]]; then
+    SHELL_RC="$HOME/.zshrc"
+elif [[ -f "$HOME/.bashrc" ]]; then
+    SHELL_RC="$HOME/.bashrc"
+elif [[ -f "$HOME/.bash_profile" ]]; then
+    SHELL_RC="$HOME/.bash_profile"
+fi
+
+ALIAS_AT="alias at='activity-tracker'"
+ALIAS_ATS="alias ats='activity-tracker summary'"
+
+if [[ -n "$SHELL_RC" ]]; then
+    if grep -q "alias at=" "$SHELL_RC" 2>/dev/null; then
+        warn "Alias 'at' já existe em $SHELL_RC — pulando"
+    else
+        echo "" >> "$SHELL_RC"
+        echo "# activity-tracker aliases" >> "$SHELL_RC"
+        echo "$ALIAS_AT" >> "$SHELL_RC"
+        echo "$ALIAS_ATS" >> "$SHELL_RC"
+        info "Aliases adicionados em $SHELL_RC"
+        info "  at  → activity-tracker"
+        info "  ats → activity-tracker summary"
+        warn "Reinicie o shell ou execute: source $SHELL_RC"
+    fi
+else
+    warn "Shell RC não encontrado. Adicione manualmente:"
+    echo "  $ALIAS_AT"
+    echo "  $ALIAS_ATS"
+fi
+
 # ── Próximos passos ──────────────────────────────────────────────────────────
 
 echo
 echo "=== Instalação concluída ==="
 echo
 echo "Comandos:"
-echo "  $BINARY start                       # inicia daemon em background"
-echo "  $BINARY stop                        # para o daemon"
-echo "  $BINARY status                      # verifica se está rodando"
-echo "  $BINARY collect                     # coleta manual"
-echo "  $BINARY summary --days 3            # resumo dos últimos 3 dias"
-echo "  $BINARY config set-model llama3.2   # define modelo padrão"
+echo "  at start                       # inicia daemon em background"
+echo "  at stop                        # para o daemon"
+echo "  at status                      # verifica se está rodando"
+echo "  at collect                     # coleta manual"
+echo "  ats --days 3                   # resumo dos últimos 3 dias"
+echo "  at config set-model llama3.2   # define modelo padrão"
 echo
