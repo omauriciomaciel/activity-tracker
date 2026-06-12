@@ -178,6 +178,7 @@ pub struct RunOptions<'a> {
     pub machine_name: &'a str,
     pub notion: Option<(&'a str, &'a str)>,
     pub verbose: bool,
+    pub search: Option<&'a str>,
 }
 
 pub async fn run(opts: RunOptions<'_>) -> Result<()> {
@@ -192,6 +193,7 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
         machine_name,
         notion,
         verbose,
+        search,
     } = opts;
     let log_dir = config::log_dir();
 
@@ -229,6 +231,22 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
     );
 
     let data = aggregate(&files)?;
+    let data = condense_for_period(data, days);
+    let data = if let Some(query) = search {
+        let filtered = filter_by_search(data, query);
+        print_search_results(&filtered, query);
+        let empty = filtered.commands.is_empty()
+            && filtered.top_apps.is_empty()
+            && filtered.tabs.is_empty()
+            && filtered.repos.is_empty();
+        if empty {
+            println!("{}", "Nenhum resultado encontrado.".yellow());
+            return Ok(());
+        }
+        filtered
+    } else {
+        data
+    };
     let context = build_context(&data);
 
     if verbose {
