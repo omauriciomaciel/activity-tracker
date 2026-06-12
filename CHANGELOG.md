@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-06-12)
+
+### Documentation
+
+- **changelog**: Atualiza histórico de versões e detalhes
+  ([`08e4515`](https://github.com/omauriciomaciel/activity-tracker/commit/08e4515143624965390c96b1f51a16839eb75093))
+
+### Features
+
+- **install**: Implementa instalação via binários pré-compilados
+  ([`e0d9813`](https://github.com/omauriciomaciel/activity-tracker/commit/e0d98131a9b6540941d87a51b3d9ea5c58078300))
+
+- **projects**: Adiciona análise e visualização de estatísticas de projetos
+  ([`9f64e24`](https://github.com/omauriciomaciel/activity-tracker/commit/9f64e244f253b8f8fe155c3b07da4a9b09945c49))
+
+
 ## v1.7.0 (2026-06-12)
 
 ### Features
