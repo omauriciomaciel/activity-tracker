@@ -20,12 +20,40 @@ use crate::config::Config;
 use crate::projects::ProjectStat;
 use crate::summarizer::{self, ActivityData};
 
+// ── Config field indices ─────────────────────────────────────────────────────
+const CF_PROVIDER: usize = 0;
+const CF_MODEL: usize = 1;
+const CF_URL_OR_KEY: usize = 2;
+const CF_LANG: usize = 3;
+const CF_MACHINE: usize = 4;
+const CF_NOTION_TOKEN: usize = 5;
+const CF_NOTION_PAGE: usize = 6;
+const CF_SLACK: usize = 7;
+const CF_ADD_BLOCK: usize = 8;
+// CF_ADD_BLOCK + 1 + i  →  blocked_patterns[i]
+
+const PROVIDERS: &[&str] = &[
+    "ollama",
+    "openai",
+    "anthropic",
+    "groq",
+    "gemini",
+    "openrouter",
+];
+const LANGS: &[&str] = &["pt-br", "en", "es", "fr", "de", "ja", "zh"];
+
 #[derive(PartialEq, Clone, Copy)]
 enum ActiveTab {
     Activities,
     Summary,
     Projects,
     Config,
+}
+
+#[derive(PartialEq)]
+enum ConfigEditMode {
+    Browse,
+    Editing(String),
 }
 
 enum SummaryState {
@@ -51,6 +79,8 @@ struct App {
     projects: Option<Vec<ProjectStat>>,
     projects_days: u32,
     config: Config,
+    config_cursor: usize,
+    config_edit: ConfigEditMode,
 }
 
 impl App {
@@ -71,6 +101,8 @@ impl App {
             projects: None,
             projects_days: 7,
             config,
+            config_cursor: 0,
+            config_edit: ConfigEditMode::Browse,
         }
     }
 
@@ -79,6 +111,12 @@ impl App {
             self.config = cfg;
         }
         self.scroll = 0;
+        self.config_cursor = 0;
+        self.config_edit = ConfigEditMode::Browse;
+    }
+
+    fn config_item_count(&self) -> usize {
+        CF_ADD_BLOCK + 1 + self.config.blocked_patterns.len()
     }
 
     fn load_data(&mut self) {
@@ -182,6 +220,117 @@ async fn event_loop(
                 if key.kind != KeyEventKind::Press {
                     continue;
                 }
+                // ── Config tab gets full key control ────────────────────
+                if app.active_tab == ActiveTab::Config {
+                    let editing = matches!(app.config_edit, ConfigEditMode::Editing(_));
+                    if editing {
+                        match key.code {
+                            KeyCode::Esc => {
+                                app.config_edit = ConfigEditMode::Browse;
+                            }
+                            KeyCode::Enter => {
+                                let old =
+                                    std::mem::replace(&mut app.config_edit, ConfigEditMode::Browse);
+                                if let ConfigEditMode::Editing(buf) = old {
+                                    cfg_apply(&mut app.config, app.config_cursor, buf);
+                                    let _ = app.config.save();
+                                    // bump cursor past new block entry
+                                    if app.config_cursor == CF_ADD_BLOCK {
+                                        app.config_cursor =
+                                            CF_ADD_BLOCK + app.config.blocked_patterns.len();
+                                    }
+                                }
+                            }
+                            KeyCode::Backspace => {
+                                if let ConfigEditMode::Editing(b) = &mut app.config_edit {
+                                    b.pop();
+                                }
+                            }
+                            KeyCode::Char(c) => {
+                                if let ConfigEditMode::Editing(b) = &mut app.config_edit {
+                                    b.push(c);
+                                }
+                            }
+                            _ => {}
+                        }
+                        continue;
+                    }
+
+                    // Browse mode
+                    let total = app.config_item_count();
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => break,
+                        KeyCode::Tab => {
+                            app.active_tab = ActiveTab::Activities;
+                            app.scroll = 0;
+                        }
+                        KeyCode::Char('1') => {
+                            app.active_tab = ActiveTab::Activities;
+                            app.scroll = 0;
+                        }
+                        KeyCode::Char('2') => {
+                            app.active_tab = ActiveTab::Summary;
+                            app.scroll = 0;
+                        }
+                        KeyCode::Char('3') => {
+                            app.ensure_projects_loaded();
+                            app.active_tab = ActiveTab::Projects;
+                            app.scroll = 0;
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            if app.config_cursor + 1 < total {
+                                app.config_cursor += 1;
+                            }
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            app.config_cursor = app.config_cursor.saturating_sub(1);
+                        }
+                        // Cycle provider / lang with ←/→
+                        KeyCode::Right | KeyCode::Char('l') => {
+                            if app.config_cursor == CF_PROVIDER {
+                                cfg_cycle(&mut app.config.provider, PROVIDERS, 1);
+                                let _ = app.config.save();
+                            } else if app.config_cursor == CF_LANG {
+                                cfg_cycle(&mut app.config.lang, LANGS, 1);
+                                let _ = app.config.save();
+                            }
+                        }
+                        KeyCode::Left | KeyCode::Char('h') => {
+                            if app.config_cursor == CF_PROVIDER {
+                                cfg_cycle(&mut app.config.provider, PROVIDERS, -1);
+                                let _ = app.config.save();
+                            } else if app.config_cursor == CF_LANG {
+                                cfg_cycle(&mut app.config.lang, LANGS, -1);
+                                let _ = app.config.save();
+                            }
+                        }
+                        // Enter / e → start editing
+                        KeyCode::Enter | KeyCode::Char('e') => {
+                            if let Some(val) = cfg_initial_value(&app.config, app.config_cursor) {
+                                app.config_edit = ConfigEditMode::Editing(val);
+                            }
+                        }
+                        // d / Delete → remove blocked pattern
+                        KeyCode::Char('d') | KeyCode::Delete => {
+                            let idx = app.config_cursor.saturating_sub(CF_ADD_BLOCK + 1);
+                            if app.config_cursor > CF_ADD_BLOCK
+                                && idx < app.config.blocked_patterns.len()
+                            {
+                                app.config.blocked_patterns.remove(idx);
+                                let _ = app.config.save();
+                                let new_total = app.config_item_count();
+                                if app.config_cursor >= new_total {
+                                    app.config_cursor = new_total.saturating_sub(1);
+                                }
+                            }
+                        }
+                        KeyCode::Char('R') => app.reload_config(),
+                        _ => {}
+                    }
+                    continue;
+                }
+                // ── Other tabs ───────────────────────────────────────────
+
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => break,
 
@@ -220,11 +369,6 @@ async fn event_loop(
                         app.reload_config();
                         app.active_tab = ActiveTab::Config;
                         app.scroll = 0;
-                    }
-
-                    // Config tab: reload
-                    KeyCode::Char('R') if app.active_tab == ActiveTab::Config => {
-                        app.reload_config();
                     }
 
                     // Projects tab: toggle week/month window
@@ -638,7 +782,14 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         ActiveTab::Projects => {
             format!(" {nav}  Tab aba  ↑↓/jk scroll  s semana  m mês  q sair ")
         }
-        ActiveTab::Config => " Tab aba  ↑↓/jk scroll  R recarregar  q sair ".to_string(),
+        ActiveTab::Config => {
+            if matches!(app.config_edit, ConfigEditMode::Editing(_)) {
+                " Enter salvar  Esc cancelar ".to_string()
+            } else {
+                " ↑↓/jk navegar  Enter/e editar  ← → ciclar  d deletar padrão  R reload  q sair "
+                    .to_string()
+            }
+        }
         _ => format!(" {nav}  Tab aba  ↑↓/jk scroll  {r_hint}  q sair "),
     };
     let p = Paragraph::new(hints).style(Style::default().fg(Color::DarkGray));
@@ -647,6 +798,12 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_config(f: &mut Frame, app: &App, area: Rect) {
     let cfg = &app.config;
+    let cur = app.config_cursor;
+    let edit_buf = match &app.config_edit {
+        ConfigEditMode::Editing(b) => Some(b.as_str()),
+        ConfigEditMode::Browse => None,
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Configuração ");
@@ -654,7 +811,9 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
 
-    let section = |label: &str| -> Line {
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    let section_line = |label: &str| {
         Line::from(Span::styled(
             format!("■ {label}"),
             Style::default()
@@ -662,29 +821,79 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         ))
     };
-    let sep = || -> Line {
+    let sep_line = || {
         Line::from(Span::styled(
-            "─".repeat(50),
+            "─".repeat(52),
             Style::default().fg(Color::DarkGray),
         ))
     };
-    let row = |key: &str, val: &str| -> Line {
-        Line::from(vec![
-            Span::styled(format!("  {key:<16}"), Style::default().fg(Color::Cyan)),
-            Span::raw(val.to_string()),
-        ])
+
+    // Render one editable field row.
+    // idx: field index; label: display name; display_val: value when not editing;
+    // cycle_hint: show "← →" hint when selected (for provider/lang)
+    let field_row = |idx: usize, label: &str, display_val: &str, cycle_hint: bool| -> Line {
+        let selected = cur == idx;
+        let editing = selected && edit_buf.is_some();
+
+        let prefix = if selected {
+            Span::styled(
+                " > ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::raw("   ")
+        };
+        let lbl = Span::styled(
+            format!("{label:<18}"),
+            if selected {
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            },
+        );
+        let val = if editing {
+            let buf = edit_buf.unwrap_or("");
+            Span::styled(
+                format!("{buf}█"),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else if cycle_hint && selected {
+            Span::styled(
+                format!("{display_val}  ← →"),
+                Style::default().fg(Color::Green),
+            )
+        } else if selected {
+            Span::styled(display_val.to_string(), Style::default().fg(Color::Green))
+        } else {
+            Span::styled(
+                display_val.to_string(),
+                Style::default().fg(Color::DarkGray),
+            )
+        };
+        Line::from(vec![prefix, lbl, val])
     };
 
-    // LLM
-    lines.push(section("LLM"));
-    lines.push(sep());
-    lines.push(row("provider", &cfg.provider));
-    lines.push(row("modelo", &cfg.model));
-    if cfg.provider == "ollama" {
-        lines.push(row("url", &cfg.ollama_url));
+    // ── LLM ──────────────────────────────────────────────────────────────────
+    lines.push(section_line("LLM"));
+    lines.push(sep_line());
+    lines.push(field_row(CF_PROVIDER, "provider", &cfg.provider, true));
+    lines.push(field_row(CF_MODEL, "modelo", &cfg.model, false));
+
+    let url_label = if cfg.provider == "ollama" {
+        "url"
     } else {
-        let key_display = cfg
-            .api_key
+        "api_key"
+    };
+    let url_val = if cfg.provider == "ollama" {
+        cfg.ollama_url.clone()
+    } else {
+        cfg.api_key
             .as_deref()
             .map(|k| {
                 let n = k.len();
@@ -694,68 +903,232 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
                     format!("{}…{}", &k[..4], &k[n - 4..])
                 }
             })
-            .unwrap_or_else(|| "não configurado".into());
-        lines.push(row("api_key", &key_display));
-    }
-    lines.push(row("idioma", &cfg.lang));
-    lines.push(Line::from(""));
-
-    // Máquina
-    lines.push(section("MÁQUINA"));
-    lines.push(sep());
-    lines.push(row("nome", &cfg.get_machine_name()));
-    lines.push(Line::from(""));
-
-    // Integrações
-    lines.push(section("INTEGRAÇÕES"));
-    lines.push(sep());
-    let notion_status = match (&cfg.notion_token, &cfg.notion_page_id) {
-        (Some(_), Some(id)) => format!("configurado  (page: {}…)", &id[..id.len().min(8)]),
-        _ => "não configurado".into(),
+            .unwrap_or_else(|| "não configurado".into())
     };
-    lines.push(row("notion", &notion_status));
-    let slack_status = if cfg.slack_webhook.is_some() {
-        "configurado"
-    } else {
-        "não configurado"
-    };
-    lines.push(row("slack", slack_status));
+    lines.push(field_row(CF_URL_OR_KEY, url_label, &url_val, false));
+    lines.push(field_row(CF_LANG, "idioma", &cfg.lang, true));
     lines.push(Line::from(""));
 
-    // Privacidade
-    lines.push(section("PRIVACIDADE"));
-    lines.push(sep());
-    if cfg.blocked_patterns.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  nenhum padrão bloqueado",
-            Style::default().fg(Color::DarkGray),
-        )));
-    } else {
-        lines.push(Line::from(Span::styled(
-            format!("  {} padrão(s) bloqueado(s):", cfg.blocked_patterns.len()),
-            Style::default().fg(Color::White),
-        )));
-        for p in &cfg.blocked_patterns {
-            lines.push(Line::from(vec![
-                Span::styled("    · ", Style::default().fg(Color::DarkGray)),
-                Span::styled(p.as_str(), Style::default().fg(Color::Red)),
-            ]));
-        }
-    }
-    lines.push(Line::from(""));
-
-    // Paths
-    lines.push(section("PATHS"));
-    lines.push(sep());
-    lines.push(row("logs", &crate::config::log_dir().display().to_string()));
-    lines.push(row(
-        "config",
-        &crate::config::config_path().display().to_string(),
+    // ── MÁQUINA ───────────────────────────────────────────────────────────────
+    lines.push(section_line("MÁQUINA"));
+    lines.push(sep_line());
+    lines.push(field_row(
+        CF_MACHINE,
+        "nome",
+        &cfg.machine_name
+            .clone()
+            .unwrap_or_else(|| cfg.get_machine_name()),
+        false,
     ));
+    lines.push(Line::from(""));
+
+    // ── INTEGRAÇÕES ───────────────────────────────────────────────────────────
+    lines.push(section_line("INTEGRAÇÕES"));
+    lines.push(sep_line());
+    let notion_token_val = cfg
+        .notion_token
+        .as_deref()
+        .map(|k| {
+            let n = k.len();
+            if n <= 8 {
+                "*".repeat(n)
+            } else {
+                format!("{}…{}", &k[..4], &k[n - 4..])
+            }
+        })
+        .unwrap_or_else(|| "não configurado".into());
+    lines.push(field_row(
+        CF_NOTION_TOKEN,
+        "notion_token",
+        &notion_token_val,
+        false,
+    ));
+    let notion_page_val = cfg.notion_page_id.as_deref().unwrap_or("não configurado");
+    lines.push(field_row(
+        CF_NOTION_PAGE,
+        "notion_page",
+        notion_page_val,
+        false,
+    ));
+    let slack_val = cfg
+        .slack_webhook
+        .as_deref()
+        .map(|u| {
+            if u.len() > 30 {
+                format!("{}…", &u[..30])
+            } else {
+                u.to_string()
+            }
+        })
+        .unwrap_or_else(|| "não configurado".into());
+    lines.push(field_row(CF_SLACK, "slack_webhook", &slack_val, false));
+    lines.push(Line::from(""));
+
+    // ── PRIVACIDADE ───────────────────────────────────────────────────────────
+    lines.push(section_line("PRIVACIDADE"));
+    lines.push(sep_line());
+
+    // "+ adicionar padrão" button
+    let add_selected = cur == CF_ADD_BLOCK;
+    let add_editing = add_selected && edit_buf.is_some();
+    let add_prefix = if add_selected {
+        Span::styled(
+            " > ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::raw("   ")
+    };
+    let add_val = if add_editing {
+        Span::styled(
+            format!("{}█", edit_buf.unwrap_or("")),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(
+            "+ adicionar padrão…",
+            if add_selected {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            },
+        )
+    };
+    lines.push(Line::from(vec![add_prefix, add_val]));
+
+    for (i, pattern) in cfg.blocked_patterns.iter().enumerate() {
+        let idx = CF_ADD_BLOCK + 1 + i;
+        let sel = cur == idx;
+        let ed = sel && edit_buf.is_some();
+        let prefix = if sel {
+            Span::styled(
+                " > ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::raw("   ")
+        };
+        let val_span = if ed {
+            Span::styled(
+                format!("{}█", edit_buf.unwrap_or("")),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled(
+                format!("- {pattern}"),
+                if sel {
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Red)
+                },
+            )
+        };
+        let del_hint = if sel && !ed {
+            Span::styled("  d deletar", Style::default().fg(Color::DarkGray))
+        } else {
+            Span::raw("")
+        };
+        lines.push(Line::from(vec![prefix, val_span, del_hint]));
+    }
+    lines.push(Line::from(""));
+
+    // ── PATHS (read-only) ─────────────────────────────────────────────────────
+    lines.push(section_line("PATHS"));
+    lines.push(sep_line());
+    lines.push(Line::from(vec![
+        Span::raw("   "),
+        Span::styled("logs              ", Style::default().fg(Color::White)),
+        Span::styled(
+            crate::config::log_dir().display().to_string(),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
+    lines.push(Line::from(vec![
+        Span::raw("   "),
+        Span::styled("config            ", Style::default().fg(Color::White)),
+        Span::styled(
+            crate::config::config_path().display().to_string(),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
 
     let p = Paragraph::new(lines)
         .block(block)
         .scroll((app.scroll, 0))
         .wrap(Wrap { trim: false });
     f.render_widget(p, area);
+}
+
+// ── Config helpers ────────────────────────────────────────────────────────────
+
+fn cfg_cycle(current: &mut String, options: &[&str], dir: i32) {
+    let pos = options
+        .iter()
+        .position(|&o| o == current.as_str())
+        .unwrap_or(0);
+    let n = options.len();
+    let new_pos = ((pos as i32 + dir).rem_euclid(n as i32)) as usize;
+    *current = options[new_pos].to_string();
+}
+
+fn cfg_initial_value(cfg: &Config, cursor: usize) -> Option<String> {
+    match cursor {
+        CF_MODEL => Some(cfg.model.clone()),
+        CF_URL_OR_KEY => Some(if cfg.provider == "ollama" {
+            cfg.ollama_url.clone()
+        } else {
+            cfg.api_key.clone().unwrap_or_default()
+        }),
+        CF_MACHINE => Some(cfg.machine_name.clone().unwrap_or_default()),
+        CF_NOTION_TOKEN => Some(cfg.notion_token.clone().unwrap_or_default()),
+        CF_NOTION_PAGE => Some(cfg.notion_page_id.clone().unwrap_or_default()),
+        CF_SLACK => Some(cfg.slack_webhook.clone().unwrap_or_default()),
+        CF_ADD_BLOCK => Some(String::new()),
+        c if c > CF_ADD_BLOCK => cfg.blocked_patterns.get(c - CF_ADD_BLOCK - 1).cloned(),
+        _ => None, // provider and lang cycle, no text edit
+    }
+}
+
+fn cfg_apply(cfg: &mut Config, cursor: usize, value: String) {
+    let v = value.trim().to_string();
+    match cursor {
+        CF_MODEL => cfg.model = v,
+        CF_URL_OR_KEY => {
+            if cfg.provider == "ollama" {
+                cfg.ollama_url = v;
+            } else {
+                cfg.api_key = if v.is_empty() { None } else { Some(v) };
+            }
+        }
+        CF_MACHINE => cfg.machine_name = if v.is_empty() { None } else { Some(v) },
+        CF_NOTION_TOKEN => cfg.notion_token = if v.is_empty() { None } else { Some(v) },
+        CF_NOTION_PAGE => cfg.notion_page_id = if v.is_empty() { None } else { Some(v) },
+        CF_SLACK => cfg.slack_webhook = if v.is_empty() { None } else { Some(v) },
+        CF_ADD_BLOCK => {
+            if !v.is_empty() {
+                cfg.blocked_patterns.push(v);
+            }
+        }
+        c if c > CF_ADD_BLOCK => {
+            let idx = c - CF_ADD_BLOCK - 1;
+            if idx < cfg.blocked_patterns.len() {
+                if v.is_empty() {
+                    cfg.blocked_patterns.remove(idx);
+                } else {
+                    cfg.blocked_patterns[idx] = v;
+                }
+            }
+        }
+        _ => {}
+    }
 }
