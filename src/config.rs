@@ -5,7 +5,12 @@ use std::path::PathBuf;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub model: String,
+    /// Provider: ollama | openai | anthropic | groq | gemini | openrouter
+    #[serde(default = "default_provider")]
+    pub provider: String,
     pub ollama_url: String,
+    #[serde(default)]
+    pub api_key: Option<String>,
     pub lang: String,
     #[serde(default)]
     pub notion_token: Option<String>,
@@ -15,11 +20,17 @@ pub struct Config {
     pub machine_name: Option<String>,
 }
 
+fn default_provider() -> String {
+    "ollama".into()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             model: "llama3.1".into(),
+            provider: "ollama".into(),
             ollama_url: "http://localhost:11434".into(),
+            api_key: None,
             lang: "pt-br".into(),
             notion_token: None,
             notion_page_id: None,
@@ -69,11 +80,27 @@ impl Config {
     }
 
     pub fn display(&self) -> String {
+        let api_line = if self.provider == "ollama" {
+            format!("  api_url:    {}", self.ollama_url)
+        } else {
+            format!(
+                "  api_key:    {}",
+                self.api_key
+                    .as_deref()
+                    .map(|k| format!(
+                        "{}…{}",
+                        &k[..k.len().min(6)],
+                        &k[k.len().saturating_sub(4)..]
+                    ))
+                    .unwrap_or_else(|| "não configurado".into())
+            )
+        };
         format!(
-            "Configuração atual ({}):\n\n  modelo:     {}\n  ollama_url: {}\n  idioma:     {}\n  máquina:    {}\n  notion:     {}\n  logs:       {}\n  config:     {}",
+            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n  máquina:    {}\n  notion:     {}\n  logs:       {}\n  config:     {}",
             config_path().display(),
+            self.provider,
             self.model,
-            self.ollama_url,
+            api_line,
             self.lang,
             self.get_machine_name(),
             if self.notion_token.is_some() && self.notion_page_id.is_some() {

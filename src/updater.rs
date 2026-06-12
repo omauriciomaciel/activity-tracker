@@ -23,10 +23,7 @@ pub fn run() -> Result<()> {
         .trim_end_matches('/')
         .trim_start_matches("https://github.com/");
 
-    let api_url = format!(
-        "https://api.github.com/repos/{}/releases/latest",
-        repo_path
-    );
+    let api_url = format!("https://api.github.com/repos/{}/releases/latest", repo_path);
 
     println!("Versão atual: v{}", CURRENT_VERSION);
     println!("Consultando GitHub...");

@@ -1,10 +1,15 @@
 use anyhow::{Context, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const NOTION_VERSION: &str = "2026-03-11";
 const MAX_SPAN_CHARS: usize = 1900;
 
-pub async fn send_page(token: &str, parent_page_id: &str, title: &str, body: &str) -> Result<String> {
+pub async fn send_page(
+    token: &str,
+    parent_page_id: &str,
+    title: &str,
+    body: &str,
+) -> Result<String> {
     let client = reqwest::Client::new();
 
     let payload = json!({
@@ -32,7 +37,10 @@ pub async fn send_page(token: &str, parent_page_id: &str, title: &str, body: &st
         anyhow::bail!("Notion API erro {status}: {body}");
     }
 
-    let result: Value = resp.json().await.context("Erro parseando resposta do Notion")?;
+    let result: Value = resp
+        .json()
+        .await
+        .context("Erro parseando resposta do Notion")?;
     Ok(result["url"].as_str().unwrap_or("").to_string())
 }
 
