@@ -88,6 +88,10 @@ ats --provider groq --model llama-3.1-8b-instant
 # Enviar resumo ao Notion
 ats --today --send-notion
 
+# TUI interativa
+at tui                       # abre a interface, hoje como data inicial
+at tui --provider openai --model gpt-4o-mini
+
 # Exportar logs em CSV ou JSON
 at export                    # hoje em CSV (stdout)
 at export --days 7           # últimos 7 dias
@@ -106,6 +110,41 @@ at config set-notion-page <page_id>
 at config set-machine-name "MacBook Pro"  # opcional, usa hostname se omitido
 at config show
 ```
+
+## TUI interativa
+
+`at tui` abre uma interface de terminal completa:
+
+```
+┌──────────────────── ◄ 2026-06-12 (hoje) ► ────────────────────┐
+│           Atividades           │           Resumo              │
+├───────────────────────────────────────────────────────────────┤
+│ ■ SHELL  (42 comandos)                                        │
+│ ─────────────────────────────────────────────────────────     │
+│   $ cargo build --release                                     │
+│   $ git commit -m "feat: tui interativa"                      │
+│   $ vim src/tui.rs                                            │
+│   ...                                                         │
+│                                                               │
+│ ■ GIT  (2 repos, 5 commits)                                   │
+│ ─────────────────────────────────────────────────────────     │
+│   activity-tracker                                            │
+│     ↳ 2026-06-12 feat: tui interativa                        │
+├───────────────────────────────────────────────────────────────┤
+│ ←/→ dia  Tab aba  ↑↓ scroll  r resumo  q sair                │
+└───────────────────────────────────────────────────────────────┘
+```
+
+| Tecla | Ação |
+|---|---|
+| `←` / `→` | Navegar entre dias |
+| `Tab` / `1` / `2` | Alternar entre abas Atividades e Resumo |
+| `↑` / `↓` ou `j` / `k` | Rolar conteúdo |
+| `PgUp` / `PgDn` | Rolar rápido |
+| `r` | Gerar resumo via LLM (usa config salva) |
+| `q` / `Esc` | Sair |
+
+Aceita os mesmos flags de provider que o `summary` (`--provider`, `--model`, `--api-key`, `--lang`).
 
 ## Autostart no login
 
