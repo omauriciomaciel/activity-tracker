@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-06-12)
+
+### Features
+
+- **ci**: Implementa pipeline de build e release automatizado
+  ([`fac3f7e`](https://github.com/omauriciomaciel/activity-tracker/commit/fac3f7e85d1ded83b72931924975ac1a7b03e853))
+
+- **updater**: Implementa sistema de atualização automática via GitHub
+  ([`94f533a`](https://github.com/omauriciomaciel/activity-tracker/commit/94f533a6b80ffacb1c70a7fbc42761a4cf9e7b3a))
+
+
 ## v1.2.0 (2026-06-09)
 
 ### Features
