@@ -15,6 +15,9 @@ patch_tags = ["fix", "perf", "refactor"]
 changelog_file = "CHANGELOG.md"
 exclude_commit_patterns = [
   "^chore\\(release\\)",
+  "^\\d+\\.\\d+\\.\\d+",
+  "^Merge branch",
+  "^Merge pull request",
 ]
 
 [tool.semantic_release.remote]
