@@ -315,6 +315,18 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
     skin.print_text(&summary);
     println!("\n{}", border.cyan());
 
+    // Persist single-day summaries so TUI can load them without re-generating
+    if days == 1 || date.is_some() {
+        let save_date = if let Some(raw) = date {
+            parse_date(raw).ok()
+        } else {
+            Some(chrono::Local::now().date_naive())
+        };
+        if let Some(d) = save_date {
+            save_summary(d, &summary);
+        }
+    }
+
     let date_label = match data.dates.as_slice() {
         [] => chrono::Local::now().format("%Y-%m-%d").to_string(),
         [single] => single.clone(),
@@ -676,6 +688,20 @@ fn scrub_secrets(cmd: &str) -> String {
     }
 
     out.join(" ")
+}
+
+pub fn save_summary(date: chrono::NaiveDate, text: &str) {
+    let dir = crate::config::summary_dir();
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let path = crate::config::summary_path(date);
+    let _ = std::fs::write(path, text);
+}
+
+pub fn load_summary(date: chrono::NaiveDate) -> Option<String> {
+    let path = crate::config::summary_path(date);
+    std::fs::read_to_string(path).ok()
 }
 
 /// Constrói o contexto como texto plano — muito mais compacto que JSON pretty-printed.

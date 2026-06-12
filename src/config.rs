@@ -138,3 +138,14 @@ pub fn log_dir() -> PathBuf {
         .join("activity-tracker")
         .join("logs")
 }
+
+pub fn summary_dir() -> PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("activity-tracker")
+        .join("summaries")
+}
+
+pub fn summary_path(date: chrono::NaiveDate) -> PathBuf {
+    summary_dir().join(format!("{}.md", date.format("%Y-%m-%d")))
+}

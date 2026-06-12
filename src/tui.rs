@@ -29,6 +29,7 @@ enum ActiveTab {
 enum SummaryState {
     Empty,
     Loading,
+    Cached(String),
     Done(String),
     Error(String),
 }
@@ -82,7 +83,10 @@ impl App {
             || !d.repos.is_empty();
         self.data = if has_data { Some(d) } else { None };
         self.scroll = 0;
-        self.summary = SummaryState::Empty;
+        self.summary = match summarizer::load_summary(self.date) {
+            Some(text) => SummaryState::Cached(text),
+            None => SummaryState::Empty,
+        };
     }
 
     fn prev_day(&mut self) {
@@ -153,7 +157,10 @@ async fn event_loop(
 
         if let Ok(result) = rx.try_recv() {
             match result {
-                Ok(summary) => app.summary = SummaryState::Done(summary),
+                Ok(summary) => {
+                    summarizer::save_summary(app.date, &summary);
+                    app.summary = SummaryState::Done(summary);
+                }
                 Err(e) => app.summary = SummaryState::Error(e),
             }
         }
@@ -224,6 +231,7 @@ async fn event_loop(
                         if matches!(app.summary, SummaryState::Loading) {
                             continue;
                         }
+
                         if let Some(data) = &app.data {
                             let context = summarizer::build_context(data);
                             let provider = app.provider.clone();
@@ -451,10 +459,9 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_summary(f: &mut Frame, app: &App, area: Rect) {
-    let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
-
     match &app.summary {
         SummaryState::Empty => {
+            let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
             let hint = if app.data.is_some() {
                 format!(
                     "\n\n  Pressione r para gerar o resumo.\n\n  Provider: {}/{}",
@@ -469,6 +476,7 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(p, area);
         }
         SummaryState::Loading => {
+            let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
             let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
             let frame = (app.tick as usize / 2) % frames.len();
             let p = Paragraph::new(format!(
@@ -479,7 +487,23 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             .style(Style::default().fg(Color::Cyan));
             f.render_widget(p, area);
         }
+        SummaryState::Cached(text) => {
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title(" Resumo LLM ")
+                .title_bottom(Span::styled(
+                    " salvo · r para regenerar ",
+                    Style::default().fg(Color::DarkGray),
+                ));
+            let p = Paragraph::new(text.as_str())
+                .block(block)
+                .scroll((app.scroll, 0))
+                .wrap(Wrap { trim: false })
+                .style(Style::default().fg(Color::White));
+            f.render_widget(p, area);
+        }
         SummaryState::Done(text) => {
+            let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
             let p = Paragraph::new(text.as_str())
                 .block(block)
                 .scroll((app.scroll, 0))
@@ -488,6 +512,7 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(p, area);
         }
         SummaryState::Error(e) => {
+            let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
             let p = Paragraph::new(format!("\n  Erro: {e}"))
                 .block(block)
                 .style(Style::default().fg(Color::Red));
@@ -577,10 +602,14 @@ fn render_projects(f: &mut Frame, app: &App, area: Rect) {
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let at_today = app.date >= chrono::Local::now().date_naive();
     let nav = if at_today { "← dia" } else { "←/→ dia" };
+    let r_hint = match &app.summary {
+        SummaryState::Cached(_) => "r regenerar",
+        _ => "r resumo",
+    };
     let hints = if app.active_tab == ActiveTab::Projects {
         format!(" {nav}  Tab aba  ↑↓/jk scroll  s semana  m mês  q sair ")
     } else {
-        format!(" {nav}  Tab aba  ↑↓/jk scroll  r resumo  q sair ")
+        format!(" {nav}  Tab aba  ↑↓/jk scroll  {r_hint}  q sair ")
     };
     let p = Paragraph::new(hints).style(Style::default().fg(Color::DarkGray));
     f.render_widget(p, area);
