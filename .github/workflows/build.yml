@@ -1,9 +1,11 @@
-name: Build
+name: Build (manual)
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v1.2.3)"
+        required: true
 
 permissions:
   contents: write
@@ -29,9 +31,16 @@ jobs:
             os: macos-13
           - target: aarch64-apple-darwin
             os: macos-14
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -72,7 +81,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           ARCH="${{ matrix.deb_arch }}"
           PKGNAME="activity-tracker_${VERSION}_${ARCH}"
 
@@ -82,7 +91,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/activity-tracker" "${PKGNAME}/usr/bin/"
           chmod 755 "${PKGNAME}/usr/bin/activity-tracker"
 
-          cat > "${PKGNAME}/DEBIAN/control" <<EOF
+          cat > "${PKGNAME}/DEBIAN/control" <<CTRL
           Package: activity-tracker
           Version: ${VERSION}
           Architecture: ${ARCH}
@@ -90,25 +99,23 @@ jobs:
           Description: Captura atividades do sistema e resume com Ollama
            Daemon that snapshots shell history, open windows, Chrome tabs and
            git context, then summarises the day with a local Ollama model.
-          EOF
+          CTRL
 
           fakeroot dpkg-deb --build "${PKGNAME}"
-          echo "DEB=${PKGNAME}.deb" >> "$GITHUB_ENV"
 
       - name: Package Linux .tar.gz
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           ARCH="${{ matrix.rust_arch }}"
           cp "target/${{ matrix.target }}/release/activity-tracker" .
           tar czf "activity-tracker-${VERSION}-linux-${ARCH}.tar.gz" \
             activity-tracker README.md install.sh
-          echo "TARBALL=activity-tracker-${VERSION}-linux-${ARCH}.tar.gz" >> "$GITHUB_ENV"
 
       # ── macOS packaging ────────────────────────────────────────────────────
 
-      - name: Detect macOS arch label
+      - name: Detect macOS arch
         if: runner.os == 'macOS'
         shell: bash
         run: |
@@ -123,7 +130,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           ARCH="${MAC_ARCH}"
 
           brew install create-dmg 2>/dev/null || true
@@ -146,51 +153,36 @@ jobs:
             -ov -format UDZO \
             "${DMG}"
 
-          echo "DMG=${DMG}" >> "$GITHUB_ENV"
-
       - name: Package macOS .tar.gz
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           ARCH="${MAC_ARCH}"
           cp "target/${{ matrix.target }}/release/activity-tracker" .
           tar czf "activity-tracker-${VERSION}-macos-${ARCH}.tar.gz" \
             activity-tracker README.md install.sh
-          echo "TARBALL=activity-tracker-${VERSION}-macos-${ARCH}.tar.gz" >> "$GITHUB_ENV"
+
+      # ── Windows packaging ──────────────────────────────────────────────────
+
+      - name: Package Windows .zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = $env:RELEASE_TAG -replace '^v', ''
+          Copy-Item "target/${{ matrix.target }}/release/activity-tracker.exe" .
+          Compress-Archive `
+            -Path activity-tracker.exe, README.md, install.sh `
+            -DestinationPath "activity-tracker-${VERSION}-windows-x86_64.zip"
 
       # ── Upload ─────────────────────────────────────────────────────────────
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.tag }}
           files: |
             *.deb
             *.tar.gz
             *.dmg
             *.zip
-
-  checksums:
-    name: Checksums
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
-          path: dist/
-
-      - name: Generate SHA256 checksums
-        shell: bash
-        run: |
-          cd dist
-          sha256sum *.deb *.tar.gz *.dmg *.zip 2>/dev/null | sort > SHA256SUMS.txt || true
-          cat SHA256SUMS.txt
-
-      - name: Upload checksums
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/SHA256SUMS.txt

@@ -12,6 +12,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     concurrency: release
+    outputs:
+      released: ${{ steps.sem.outputs.released }}
+      tag: ${{ steps.sem.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -25,10 +28,221 @@ jobs:
 
       - run: pip install python-semantic-release
 
-      - run: semantic-release version
+      - name: Run semantic-release
+        id: sem
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          semantic-release version
+          semantic-release publish
+          TAG=$(git tag --points-at HEAD 2>/dev/null | grep '^v' | head -1 || true)
+          if [[ -n "$TAG" ]]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - run: semantic-release publish
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  build:
+    name: ${{ matrix.target }}
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            deb_arch: amd64
+            rust_arch: x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            deb_arch: arm64
+            rust_arch: aarch64
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+    env:
+      RELEASE_TAG: ${{ needs.release.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross == true
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fakeroot dpkg-dev
+
+      - name: Install aarch64 cross toolchain
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build (cross)
+        if: matrix.cross == true
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build
+        if: matrix.cross != true
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # ── Linux packaging ────────────────────────────────────────────────────
+
+      - name: Package .deb
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          ARCH="${{ matrix.deb_arch }}"
+          PKGNAME="activity-tracker_${VERSION}_${ARCH}"
+
+          mkdir -p "${PKGNAME}/usr/bin"
+          mkdir -p "${PKGNAME}/DEBIAN"
+
+          cp "target/${{ matrix.target }}/release/activity-tracker" "${PKGNAME}/usr/bin/"
+          chmod 755 "${PKGNAME}/usr/bin/activity-tracker"
+
+          cat > "${PKGNAME}/DEBIAN/control" <<CTRL
+          Package: activity-tracker
+          Version: ${VERSION}
+          Architecture: ${ARCH}
+          Maintainer: Mauricio <owldatalb@gmail.com>
+          Description: Captura atividades do sistema e resume com Ollama
+           Daemon that snapshots shell history, open windows, Chrome tabs and
+           git context, then summarises the day with a local Ollama model.
+          CTRL
+
+          fakeroot dpkg-deb --build "${PKGNAME}"
+
+      - name: Package Linux .tar.gz
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          ARCH="${{ matrix.rust_arch }}"
+          cp "target/${{ matrix.target }}/release/activity-tracker" .
+          tar czf "activity-tracker-${VERSION}-linux-${ARCH}.tar.gz" \
+            activity-tracker README.md install.sh
+
+      # ── macOS packaging ────────────────────────────────────────────────────
+
+      - name: Detect macOS arch
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
+            echo "MAC_ARCH=aarch64" >> "$GITHUB_ENV"
+          else
+            echo "MAC_ARCH=x86_64" >> "$GITHUB_ENV"
+          fi
+
+      - name: Package macOS .dmg
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          ARCH="${MAC_ARCH}"
+
+          brew install create-dmg 2>/dev/null || true
+
+          mkdir -p dmg-staging
+          cp "target/${{ matrix.target }}/release/activity-tracker" dmg-staging/
+
+          DMG="activity-tracker-${VERSION}-macos-${ARCH}.dmg"
+
+          create-dmg \
+            --volname "Activity Tracker ${VERSION}" \
+            --window-size 400 200 \
+            --icon-size 80 \
+            --no-internet-enable \
+            "${DMG}" \
+            dmg-staging/ \
+          || hdiutil create \
+            -volname "Activity Tracker ${VERSION}" \
+            -srcfolder dmg-staging \
+            -ov -format UDZO \
+            "${DMG}"
+
+      - name: Package macOS .tar.gz
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          ARCH="${MAC_ARCH}"
+          cp "target/${{ matrix.target }}/release/activity-tracker" .
+          tar czf "activity-tracker-${VERSION}-macos-${ARCH}.tar.gz" \
+            activity-tracker README.md install.sh
+
+      # ── Windows packaging ──────────────────────────────────────────────────
+
+      - name: Package Windows .zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = $env:RELEASE_TAG -replace '^v', ''
+          Copy-Item "target/${{ matrix.target }}/release/activity-tracker.exe" .
+          Compress-Archive `
+            -Path activity-tracker.exe, README.md, install.sh `
+            -DestinationPath "activity-tracker-${VERSION}-windows-x86_64.zip"
+
+      # ── Upload ─────────────────────────────────────────────────────────────
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          files: |
+            *.deb
+            *.tar.gz
+            *.dmg
+            *.zip
+
+  checksums:
+    name: Checksums
+    needs: [release, build]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all release assets
+        uses: robinraju/release-downloader@v1
+        with:
+          tag: ${{ needs.release.outputs.tag }}
+          fileName: "*"
+          out-file-path: dist/
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd dist
+          sha256sum *.deb *.tar.gz *.dmg *.zip 2>/dev/null | sort > SHA256SUMS.txt || true
+          cat SHA256SUMS.txt
+
+      - name: Upload checksums
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          files: dist/SHA256SUMS.txt
