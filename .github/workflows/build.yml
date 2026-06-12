@@ -1,0 +1,194 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            deb_arch: amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            deb_arch: arm64
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+          - target: aarch64-apple-darwin
+            os: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross == true
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fakeroot dpkg-dev
+
+      - name: Install aarch64 cross toolchain
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build (cross)
+        if: matrix.cross == true
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build
+        if: matrix.cross != true
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # ── Linux packaging ────────────────────────────────────────────────────
+
+      - name: Package .deb
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${{ matrix.deb_arch }}"
+          PKGNAME="activity-tracker_${VERSION}_${ARCH}"
+
+          mkdir -p "${PKGNAME}/usr/bin"
+          mkdir -p "${PKGNAME}/DEBIAN"
+
+          cp "target/${{ matrix.target }}/release/activity-tracker" "${PKGNAME}/usr/bin/"
+          chmod 755 "${PKGNAME}/usr/bin/activity-tracker"
+
+          cat > "${PKGNAME}/DEBIAN/control" <<EOF
+          Package: activity-tracker
+          Version: ${VERSION}
+          Architecture: ${ARCH}
+          Maintainer: Mauricio <owldatalb@gmail.com>
+          Description: Captura atividades do sistema e resume com Ollama
+           Daemon that snapshots shell history, open windows, Chrome tabs and
+           git context, then summarises the day with a local Ollama model.
+          EOF
+
+          fakeroot dpkg-deb --build "${PKGNAME}"
+          echo "DEB=${PKGNAME}.deb" >> "$GITHUB_ENV"
+
+      - name: Package Linux .tar.gz
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${{ matrix.deb_arch }}"
+          cp "target/${{ matrix.target }}/release/activity-tracker" .
+          tar czf "activity-tracker-${VERSION}-linux-${ARCH}.tar.gz" \
+            activity-tracker README.md install.sh
+          echo "TARBALL=activity-tracker-${VERSION}-linux-${ARCH}.tar.gz" >> "$GITHUB_ENV"
+
+      # ── macOS packaging ────────────────────────────────────────────────────
+
+      - name: Detect macOS arch label
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
+            echo "MAC_ARCH=aarch64" >> "$GITHUB_ENV"
+          else
+            echo "MAC_ARCH=x86_64" >> "$GITHUB_ENV"
+          fi
+
+      - name: Package macOS .dmg
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${MAC_ARCH}"
+
+          brew install create-dmg 2>/dev/null || true
+
+          mkdir -p dmg-staging
+          cp "target/${{ matrix.target }}/release/activity-tracker" dmg-staging/
+
+          DMG="activity-tracker-${VERSION}-macos-${ARCH}.dmg"
+
+          create-dmg \
+            --volname "Activity Tracker ${VERSION}" \
+            --window-size 400 200 \
+            --icon-size 80 \
+            --no-internet-enable \
+            "${DMG}" \
+            dmg-staging/ \
+          || hdiutil create \
+            -volname "Activity Tracker ${VERSION}" \
+            -srcfolder dmg-staging \
+            -ov -format UDZO \
+            "${DMG}"
+
+          echo "DMG=${DMG}" >> "$GITHUB_ENV"
+
+      - name: Package macOS .tar.gz
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${MAC_ARCH}"
+          cp "target/${{ matrix.target }}/release/activity-tracker" .
+          tar czf "activity-tracker-${VERSION}-macos-${ARCH}.tar.gz" \
+            activity-tracker README.md install.sh
+          echo "TARBALL=activity-tracker-${VERSION}-macos-${ARCH}.tar.gz" >> "$GITHUB_ENV"
+
+      # ── Upload ─────────────────────────────────────────────────────────────
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.deb
+            *.tar.gz
+            *.dmg
+            *.zip
+
+  checksums:
+    name: Checksums
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist/
+
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum *.deb *.tar.gz *.dmg *.zip 2>/dev/null | sort > SHA256SUMS.txt || true
+          cat SHA256SUMS.txt
+
+      - name: Upload checksums
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/SHA256SUMS.txt
