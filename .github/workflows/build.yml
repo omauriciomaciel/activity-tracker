@@ -1,11 +1,17 @@
-name: Build (manual)
+name: Build
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
         description: "Tag to build (e.g. v1.2.3)"
         required: true
+        type: string
 
 permissions:
   contents: write
@@ -28,31 +34,29 @@ jobs:
             rust_arch: aarch64
             cross: true
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
           - target: aarch64-apple-darwin
-            os: macos-14
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: macos-latest
 
     env:
-      RELEASE_TAG: ${{ github.event.inputs.tag }}
+      RELEASE_TAG: ${{ inputs.tag }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.event.inputs.tag }}
+          ref: ${{ inputs.tag }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
         with:
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: ${{ matrix.target }}
 
       - name: Install cross
         if: matrix.cross == true
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2
         with:
           tool: cross
 
@@ -101,6 +105,11 @@ jobs:
            git context, then summarises the day with a local Ollama model.
           CTRL
 
+          mkdir -p "${PKGNAME}/etc/profile.d"
+          printf "alias at='activity-tracker'\nalias ats='activity-tracker summary'\n" \
+            > "${PKGNAME}/etc/profile.d/activity-tracker.sh"
+          chmod 644 "${PKGNAME}/etc/profile.d/activity-tracker.sh"
+
           fakeroot dpkg-deb --build "${PKGNAME}"
 
       - name: Package Linux .tar.gz
@@ -137,6 +146,7 @@ jobs:
 
           mkdir -p dmg-staging
           cp "target/${{ matrix.target }}/release/activity-tracker" dmg-staging/
+          cp install.sh dmg-staging/
 
           DMG="activity-tracker-${VERSION}-macos-${ARCH}.dmg"
 
@@ -163,24 +173,12 @@ jobs:
           tar czf "activity-tracker-${VERSION}-macos-${ARCH}.tar.gz" \
             activity-tracker README.md install.sh
 
-      # ── Windows packaging ──────────────────────────────────────────────────
-
-      - name: Package Windows .zip
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $VERSION = $env:RELEASE_TAG -replace '^v', ''
-          Copy-Item "target/${{ matrix.target }}/release/activity-tracker.exe" .
-          Compress-Archive `
-            -Path activity-tracker.exe, README.md, install.sh `
-            -DestinationPath "activity-tracker-${VERSION}-windows-x86_64.zip"
-
       # ── Upload ─────────────────────────────────────────────────────────────
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
+          tag_name: ${{ inputs.tag }}
           files: |
             *.deb
             *.tar.gz
