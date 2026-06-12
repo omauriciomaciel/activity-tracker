@@ -16,12 +16,14 @@ use std::io;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+use crate::projects::ProjectStat;
 use crate::summarizer::{self, ActivityData};
 
 #[derive(PartialEq, Clone, Copy)]
 enum ActiveTab {
     Activities,
     Summary,
+    Projects,
 }
 
 enum SummaryState {
@@ -43,6 +45,8 @@ struct App {
     ollama_url: String,
     api_key: Option<String>,
     lang: String,
+    projects: Option<Vec<ProjectStat>>,
+    projects_days: u32,
 }
 
 impl App {
@@ -59,6 +63,8 @@ impl App {
             ollama_url: opts.ollama_url,
             api_key: opts.api_key,
             lang: opts.lang,
+            projects: None,
+            projects_days: 7,
         }
     }
 
@@ -89,6 +95,17 @@ impl App {
             self.date += chrono::Duration::days(1);
             self.load_data();
         }
+    }
+
+    fn ensure_projects_loaded(&mut self) {
+        if self.projects.is_none() {
+            self.projects =
+                Some(crate::projects::load_stats(self.projects_days).unwrap_or_default());
+        }
+    }
+
+    fn reload_projects(&mut self) {
+        self.projects = Some(crate::projects::load_stats(self.projects_days).unwrap_or_default());
     }
 }
 
@@ -155,7 +172,11 @@ async fn event_loop(
                     KeyCode::Tab => {
                         app.active_tab = match app.active_tab {
                             ActiveTab::Activities => ActiveTab::Summary,
-                            ActiveTab::Summary => ActiveTab::Activities,
+                            ActiveTab::Summary => {
+                                app.ensure_projects_loaded();
+                                ActiveTab::Projects
+                            }
+                            ActiveTab::Projects => ActiveTab::Activities,
                         };
                         app.scroll = 0;
                     }
@@ -165,6 +186,23 @@ async fn event_loop(
                     }
                     KeyCode::Char('2') => {
                         app.active_tab = ActiveTab::Summary;
+                        app.scroll = 0;
+                    }
+                    KeyCode::Char('3') => {
+                        app.ensure_projects_loaded();
+                        app.active_tab = ActiveTab::Projects;
+                        app.scroll = 0;
+                    }
+
+                    // Projects tab: toggle week/month window
+                    KeyCode::Char('s') if app.active_tab == ActiveTab::Projects => {
+                        app.projects_days = 7;
+                        app.reload_projects();
+                        app.scroll = 0;
+                    }
+                    KeyCode::Char('m') if app.active_tab == ActiveTab::Projects => {
+                        app.projects_days = 30;
+                        app.reload_projects();
                         app.scroll = 0;
                     }
 
@@ -246,10 +284,11 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         format!("◄  {}  ►", app.date.format("%Y-%m-%d  %A"))
     };
 
-    let tab_names = vec!["  Atividades  ", "  Resumo  "];
+    let tab_names = vec!["  Atividades  ", "  Resumo  ", "  Projetos  "];
     let selected = match app.active_tab {
         ActiveTab::Activities => 0,
         ActiveTab::Summary => 1,
+        ActiveTab::Projects => 2,
     };
 
     let tabs = Tabs::new(tab_names)
@@ -280,6 +319,7 @@ fn render_content(f: &mut Frame, app: &App, area: Rect) {
     match app.active_tab {
         ActiveTab::Activities => render_activities(f, app, area),
         ActiveTab::Summary => render_summary(f, app, area),
+        ActiveTab::Projects => render_projects(f, app, area),
     }
 }
 
@@ -456,10 +496,92 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
+fn render_projects(f: &mut Frame, app: &App, area: Rect) {
+    let window_label = if app.projects_days == 7 {
+        "7 dias"
+    } else {
+        "30 dias"
+    };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" Projetos — {window_label} "));
+
+    let stats = match &app.projects {
+        None => {
+            let p = Paragraph::new("\n\n  Carregando...")
+                .block(block)
+                .style(Style::default().fg(Color::DarkGray));
+            f.render_widget(p, area);
+            return;
+        }
+        Some(s) if s.is_empty() => {
+            let p = Paragraph::new(
+                "\n\n  Nenhum commit encontrado no período.\n\n  O daemon precisa estar rodando para coletar dados de git.",
+            )
+            .block(block)
+            .style(Style::default().fg(Color::DarkGray));
+            f.render_widget(p, area);
+            return;
+        }
+        Some(s) => s,
+    };
+
+    let max_name = stats
+        .iter()
+        .map(|s| s.name.len())
+        .max()
+        .unwrap_or(10)
+        .min(24);
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(""));
+
+    for stat in stats {
+        let bar_filled = ((stat.pct / 100.0) * 24.0).round() as usize;
+        let bar_empty = 24usize.saturating_sub(bar_filled);
+
+        let name = if stat.name.len() > max_name {
+            format!("{}…", &stat.name[..max_name.saturating_sub(1)])
+        } else {
+            format!("{:<width$}", stat.name, width = max_name)
+        };
+
+        lines.push(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                name,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled("█".repeat(bar_filled), Style::default().fg(Color::Green)),
+            Span::styled("░".repeat(bar_empty), Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("  {:>5.1}%", stat.pct),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  {}c {}d", stat.commits, stat.days_active),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+    }
+
+    let p = Paragraph::new(lines).block(block).scroll((app.scroll, 0));
+    f.render_widget(p, area);
+}
+
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let at_today = app.date >= chrono::Local::now().date_naive();
     let nav = if at_today { "← dia" } else { "←/→ dia" };
-    let hints = format!(" {nav}  Tab aba  ↑↓/jk scroll  r resumo  q sair ");
+    let hints = if app.active_tab == ActiveTab::Projects {
+        format!(" {nav}  Tab aba  ↑↓/jk scroll  s semana  m mês  q sair ")
+    } else {
+        format!(" {nav}  Tab aba  ↑↓/jk scroll  r resumo  q sair ")
+    };
     let p = Paragraph::new(hints).style(Style::default().fg(Color::DarkGray));
     f.render_widget(p, area);
 }

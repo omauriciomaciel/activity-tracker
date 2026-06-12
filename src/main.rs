@@ -2,6 +2,7 @@ mod collector;
 mod config;
 mod daemon;
 mod notion;
+mod projects;
 mod summarizer;
 mod tui;
 mod updater;

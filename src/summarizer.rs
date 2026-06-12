@@ -245,7 +245,24 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
     } else {
         data
     };
-    let context = build_context(&data);
+
+    let project_stats = if date.is_none() && days > 1 {
+        crate::projects::load_stats(days)
+            .ok()
+            .filter(|s| !s.is_empty())
+    } else {
+        None
+    };
+
+    let context = if let Some(ref stats) = project_stats {
+        format!(
+            "{}{}",
+            build_context(&data),
+            crate::projects::format_context(stats, days)
+        )
+    } else {
+        build_context(&data)
+    };
 
     println!(
         "{}",
@@ -254,6 +271,36 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
     let summary = call_llm(provider, ollama_url, api_key, model, &context, lang).await?;
 
     let border = "━".repeat(47);
+
+    if let Some(ref stats) = project_stats {
+        println!("\n{}", border.cyan());
+        println!(
+            "  {}  {}",
+            "PROJETOS".bold().white(),
+            format!("— últimos {days} dias").cyan()
+        );
+        println!("{}", border.cyan());
+        let max_name = stats
+            .iter()
+            .map(|s| s.name.len())
+            .max()
+            .unwrap_or(10)
+            .min(20);
+        for s in stats {
+            let bar_len = ((s.pct / 100.0) * 20.0).round() as usize;
+            let bar = format!("{:<20}", "█".repeat(bar_len));
+            println!(
+                "  {:<width$}  {}  {:>5.1}%  ({}c, {}d)",
+                s.name,
+                bar,
+                s.pct,
+                s.commits,
+                s.days_active,
+                width = max_name,
+            );
+        }
+    }
+
     println!("\n{}", border.cyan());
     println!(
         "  {}  {}",
