@@ -1,6 +1,9 @@
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+        MouseButton, MouseEventKind,
+    },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -82,6 +85,9 @@ struct App {
     config: Config,
     config_cursor: usize,
     config_edit: ConfigEditMode,
+    // linha lógica (com scroll) → índice do campo Config; usize::MAX = não-campo
+    config_row_map: Vec<usize>,
+    last_size: Rect,
 }
 
 impl App {
@@ -104,6 +110,8 @@ impl App {
             config,
             config_cursor: 0,
             config_edit: ConfigEditMode::Browse,
+            config_row_map: Vec::new(),
+            last_size: Rect::default(),
         }
     }
 
@@ -219,7 +227,12 @@ async fn event_loop(
         }
 
         if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
+            match event::read()? {
+            Event::Mouse(mouse) => {
+                handle_mouse(app, mouse);
+                continue;
+            }
+            Event::Key(key) => {
                 if key.kind != KeyEventKind::Press {
                     continue;
                 }
@@ -480,7 +493,9 @@ async fn event_loop(
                     }
                     _ => {}
                 }
-            }
+            } // Event::Key
+            _ => {}
+            } // match event::read()
         }
     }
     Ok(())
@@ -488,8 +503,9 @@ async fn event_loop(
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
-fn render(f: &mut Frame, app: &App) {
+fn render(f: &mut Frame, app: &mut App) {
     let size = f.area();
+    app.last_size = size;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -544,7 +560,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(tabs, area);
 }
 
-fn render_content(f: &mut Frame, app: &App, area: Rect) {
+fn render_content(f: &mut Frame, app: &mut App, area: Rect) {
     match app.active_tab {
         ActiveTab::Activities => render_activities(f, app, area),
         ActiveTab::Summary => render_summary(f, app, area),
@@ -866,7 +882,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(p, area);
 }
 
-fn render_config(f: &mut Frame, app: &App, area: Rect) {
+fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
     let cfg = &app.config;
     let cur = app.config_cursor;
     // edit_buf: Some((buffer, cursor_char_index)) quando em modo edição
@@ -880,7 +896,17 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         .title(" Configuração ");
 
     let mut lines: Vec<Line> = Vec::new();
-    lines.push(Line::from(""));
+    // Parallel vec: lines[i] → config field index (usize::MAX = non-field)
+    let mut row_map: Vec<usize> = Vec::new();
+
+    macro_rules! push {
+        ($line:expr, $field:expr) => {
+            lines.push($line);
+            row_map.push($field);
+        };
+    }
+
+    push!(Line::from(""), usize::MAX);
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -951,10 +977,10 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
     };
 
     // ── LLM ──────────────────────────────────────────────────────────────────
-    lines.push(section_line("LLM"));
-    lines.push(sep_line());
-    lines.push(field_row(CF_PROVIDER, "provider", &cfg.provider, true));
-    lines.push(field_row(CF_MODEL, "modelo", &cfg.model, false));
+    push!(section_line("LLM"), usize::MAX);
+    push!(sep_line(), usize::MAX);
+    push!(field_row(CF_PROVIDER, "provider", &cfg.provider, true), CF_PROVIDER);
+    push!(field_row(CF_MODEL, "modelo", &cfg.model, false), CF_MODEL);
 
     let url_label = if cfg.provider == "ollama" {
         "url"
@@ -976,8 +1002,8 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
             })
             .unwrap_or_else(|| "não configurado".into())
     };
-    lines.push(field_row(CF_URL_OR_KEY, url_label, &url_val, false));
-    lines.push(field_row(CF_LANG, "idioma", &cfg.lang, true));
+    push!(field_row(CF_URL_OR_KEY, url_label, &url_val, false), CF_URL_OR_KEY);
+    push!(field_row(CF_LANG, "idioma", &cfg.lang, true), CF_LANG);
 
     // CF_PROMPT: rendering multi-linha customizado
     {
@@ -1008,22 +1034,22 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
             for (i, part) in parts.iter().enumerate() {
                 let text = part.to_string();
                 if i == 0 {
-                    lines.push(Line::from(vec![
+                    push!(Line::from(vec![
                         prefix.clone(),
                         lbl.clone(),
                         Span::styled(text, edit_style),
-                    ]));
+                    ]), CF_PROMPT);
                 } else {
-                    lines.push(Line::from(Span::styled(
+                    push!(Line::from(Span::styled(
                         format!("   {:<18}{text}", ""),
                         edit_style,
-                    )));
+                    )), CF_PROMPT);
                 }
             }
-            lines.push(Line::from(Span::styled(
+            push!(Line::from(Span::styled(
                 "   [Enter = confirma  •  \\n = quebra de linha  •  Esc = cancela]",
                 Style::default().fg(Color::DarkGray),
-            )));
+            )), usize::MAX);
         } else {
             let template = cfg.custom_prompt.as_deref()
                 .unwrap_or(summarizer::DEFAULT_PROMPT_TEMPLATE);
@@ -1036,46 +1062,46 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 Style::default().fg(Color::DarkGray)
             };
-            lines.push(Line::from(vec![
+            push!(Line::from(vec![
                 prefix,
                 lbl,
                 Span::styled(first.to_string(), val_style),
-            ]));
+            ]), CF_PROMPT);
 
             // Linhas seguintes indentadas (sempre visíveis, não só quando selecionado)
             for part in parts.iter().skip(1) {
-                lines.push(Line::from(Span::styled(
+                push!(Line::from(Span::styled(
                     format!("   {:<18}{}", "", part),
                     val_style,
-                )));
+                )), CF_PROMPT);
             }
 
             if prompt_selected {
-                lines.push(Line::from(Span::styled(
+                push!(Line::from(Span::styled(
                     "   [Enter para editar  •  \\n = quebra de linha]",
                     Style::default().fg(Color::DarkGray),
-                )));
+                )), usize::MAX);
             }
         }
     }
-    lines.push(Line::from(""));
+    push!(Line::from(""), usize::MAX);
 
     // ── MÁQUINA ───────────────────────────────────────────────────────────────
-    lines.push(section_line("MÁQUINA"));
-    lines.push(sep_line());
-    lines.push(field_row(
+    push!(section_line("MÁQUINA"), usize::MAX);
+    push!(sep_line(), usize::MAX);
+    push!(field_row(
         CF_MACHINE,
         "nome",
         &cfg.machine_name
             .clone()
             .unwrap_or_else(|| cfg.get_machine_name()),
         false,
-    ));
-    lines.push(Line::from(""));
+    ), CF_MACHINE);
+    push!(Line::from(""), usize::MAX);
 
     // ── INTEGRAÇÕES ───────────────────────────────────────────────────────────
-    lines.push(section_line("INTEGRAÇÕES"));
-    lines.push(sep_line());
+    push!(section_line("INTEGRAÇÕES"), usize::MAX);
+    push!(sep_line(), usize::MAX);
     let notion_token_val = cfg
         .notion_token
         .as_deref()
@@ -1088,19 +1114,19 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
             }
         })
         .unwrap_or_else(|| "não configurado".into());
-    lines.push(field_row(
+    push!(field_row(
         CF_NOTION_TOKEN,
         "notion_token",
         &notion_token_val,
         false,
-    ));
+    ), CF_NOTION_TOKEN);
     let notion_page_val = cfg.notion_page_id.as_deref().unwrap_or("não configurado");
-    lines.push(field_row(
+    push!(field_row(
         CF_NOTION_PAGE,
         "notion_page",
         notion_page_val,
         false,
-    ));
+    ), CF_NOTION_PAGE);
     let slack_val = cfg
         .slack_webhook
         .as_deref()
@@ -1112,12 +1138,12 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
             }
         })
         .unwrap_or_else(|| "não configurado".into());
-    lines.push(field_row(CF_SLACK, "slack_webhook", &slack_val, false));
-    lines.push(Line::from(""));
+    push!(field_row(CF_SLACK, "slack_webhook", &slack_val, false), CF_SLACK);
+    push!(Line::from(""), usize::MAX);
 
     // ── PRIVACIDADE ───────────────────────────────────────────────────────────
-    lines.push(section_line("PRIVACIDADE"));
-    lines.push(sep_line());
+    push!(section_line("PRIVACIDADE"), usize::MAX);
+    push!(sep_line(), usize::MAX);
 
     // "+ adicionar padrão" button
     let add_selected = cur == CF_ADD_BLOCK;
@@ -1152,7 +1178,7 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
             },
         )
     };
-    lines.push(Line::from(vec![add_prefix, add_val]));
+    push!(Line::from(vec![add_prefix, add_val]), CF_ADD_BLOCK);
 
     for (i, pattern) in cfg.blocked_patterns.iter().enumerate() {
         let idx = CF_ADD_BLOCK + 1 + i;
@@ -1191,35 +1217,114 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         } else {
             Span::raw("")
         };
-        lines.push(Line::from(vec![prefix, val_span, del_hint]));
+        push!(Line::from(vec![prefix, val_span, del_hint]), idx);
     }
-    lines.push(Line::from(""));
+    push!(Line::from(""), usize::MAX);
 
     // ── PATHS (read-only) ─────────────────────────────────────────────────────
-    lines.push(section_line("PATHS"));
-    lines.push(sep_line());
-    lines.push(Line::from(vec![
+    push!(section_line("PATHS"), usize::MAX);
+    push!(sep_line(), usize::MAX);
+    push!(Line::from(vec![
         Span::raw("   "),
         Span::styled("logs              ", Style::default().fg(Color::White)),
         Span::styled(
             crate::config::log_dir().display().to_string(),
             Style::default().fg(Color::DarkGray),
         ),
-    ]));
-    lines.push(Line::from(vec![
+    ]), usize::MAX);
+    push!(Line::from(vec![
         Span::raw("   "),
         Span::styled("config            ", Style::default().fg(Color::White)),
         Span::styled(
             crate::config::config_path().display().to_string(),
             Style::default().fg(Color::DarkGray),
         ),
-    ]));
+    ]), usize::MAX);
+
+    app.config_row_map = row_map;
 
     let p = Paragraph::new(lines)
         .block(block)
-        .scroll((app.scroll, 0))
-        .wrap(Wrap { trim: false });
+        .scroll((app.scroll, 0));
     f.render_widget(p, area);
+}
+
+// ── Mouse handler ────────────────────────────────────────────────────────────
+
+fn handle_mouse(app: &mut App, mouse: crossterm::event::MouseEvent) {
+    let x = mouse.column;
+    let y = mouse.row;
+    let width = app.last_size.width;
+    let height = app.last_size.height;
+
+    match mouse.kind {
+        MouseEventKind::ScrollUp => {
+            app.scroll = app.scroll.saturating_sub(3);
+        }
+        MouseEventKind::ScrollDown => {
+            app.scroll = app.scroll.saturating_add(3);
+        }
+        MouseEventKind::Down(MouseButton::Left) => {
+            if y == 0 {
+                // Top border: click left half → prev day, right half → next day
+                if x < width / 2 {
+                    app.prev_day();
+                } else {
+                    app.next_day();
+                }
+            } else if y <= 2 {
+                // Header block (rows 0-2): detect tab click by computing x ranges dynamically
+                let tab_names = ["  Atividades  ", "  Resumo  ", "  Projetos  ", "  Config  "];
+                let mut pos = 1u16; // skip left block border
+                let mut clicked = None;
+                let mut last_started = None; // fallback: last tab whose start ≤ x
+                for (i, name) in tab_names.iter().enumerate() {
+                    let len = name.chars().count() as u16;
+                    if x >= pos { last_started = Some(i); }
+                    if x >= pos && x < pos + len {
+                        clicked = Some(i);
+                        break;
+                    }
+                    pos += len + 1; // +1 for divider "│"
+                }
+                // Clicking in empty space to the right of all tabs → nearest tab to the left
+                if clicked.is_none() {
+                    clicked = last_started;
+                }
+                if let Some(idx) = clicked {
+                    let new_tab = match idx {
+                        0 => ActiveTab::Activities,
+                        1 => ActiveTab::Summary,
+                        2 => ActiveTab::Projects,
+                        _ => ActiveTab::Config,
+                    };
+                    if new_tab == ActiveTab::Projects {
+                        app.ensure_projects_loaded();
+                    }
+                    if new_tab == ActiveTab::Config && app.active_tab != ActiveTab::Config {
+                        app.reload_config();
+                    }
+                    if new_tab != app.active_tab {
+                        app.active_tab = new_tab;
+                        app.scroll = 0;
+                    }
+                }
+            } else if y >= 4 && y < height.saturating_sub(1) {
+                // Content area: y=3 is block top border, y=4 is first content row
+                if app.active_tab == ActiveTab::Config
+                    && matches!(app.config_edit, ConfigEditMode::Browse)
+                {
+                    let row = (y as usize - 4) + app.scroll as usize;
+                    if let Some(&field) = app.config_row_map.get(row) {
+                        if field != usize::MAX {
+                            app.config_cursor = field;
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 // ── Config helpers ────────────────────────────────────────────────────────────
