@@ -128,7 +128,7 @@ at config show
 
 ```
 ┌──────────────────── ◄ 2026-06-12 (hoje) ► ────────────────────┐
-│     Atividades     │      Resumo      │      Projetos         │
+│  Atividades  │  Resumo  │  Projetos  │  Config                │
 ├───────────────────────────────────────────────────────────────┤
 │ ■ SHELL  (42 comandos)                                        │
 │ ─────────────────────────────────────────────────────────     │
@@ -153,16 +153,23 @@ A aba **Projetos** exibe distribuição de tempo por repositório:
   meu-projeto       ████████░░░░░░░░░░░░░░░░   32.7%  ( 6c, 3d)
 ```
 
+A aba **Config** permite editar todas as configurações sem sair da TUI. Campos de provider e idioma ciclan com `←`/`→`; demais campos abrem modo de edição de texto. Padrões de privacidade podem ser adicionados e removidos diretamente.
+
 | Tecla | Ação |
 |---|---|
-| `←` / `→` | Navegar entre dias |
-| `Tab` / `1` / `2` / `3` | Alternar entre abas Atividades, Resumo e Projetos |
-| `↑` / `↓` ou `j` / `k` | Rolar conteúdo |
+| `←` / `→` ou `h` / `l` | Navegar entre dias |
+| `Tab` / `1` / `2` / `3` / `4` | Alternar entre abas Atividades, Resumo, Projetos e Config |
+| `↑` / `↓` ou `j` / `k` | Rolar conteúdo / navegar campos (Config) |
 | `PgUp` / `PgDn` | Rolar rápido |
-| `r` | Gerar resumo via LLM (usa config salva) |
+| `Home` | Ir ao topo |
+| `r` | Gerar resumo via LLM (muda para aba Resumo) |
 | `s` | Na aba Projetos: janela de 7 dias |
 | `m` | Na aba Projetos: janela de 30 dias |
-| `q` / `Esc` | Sair |
+| `Enter` / `e` | Na aba Config: editar campo selecionado |
+| `←` / `→` | Na aba Config: ciclar provider ou idioma |
+| `d` / `Delete` | Na aba Config: remover padrão de privacidade |
+| `R` | Na aba Config: recarregar configuração do disco |
+| `q` / `Esc` | Sair (ou cancelar edição na aba Config) |
 
 Aceita os mesmos flags de provider que o `summary` (`--provider`, `--model`, `--api-key`, `--lang`).
 
