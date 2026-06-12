@@ -5,14 +5,13 @@ Daemon em Rust que captura atividades do sistema (terminal, janelas abertas, aba
 ## Instalação
 
 ```bash
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/omauriciomaciel/activity-tracker/main/install.sh | sh
 ```
 
-O script compila o binário, instala em `~/.local/bin`, configura o autostart automaticamente e adiciona os aliases ao seu shell:
+O script detecta o OS/arquitetura, baixa o binário pré-compilado da última release do GitHub, instala em `~/.local/bin`, configura o autostart e adiciona aliases ao shell:
 
 - **macOS** — cria um LaunchAgent em `~/Library/LaunchAgents/` e abre as telas de permissão necessárias
 - **Linux (systemd)** — cria e ativa um serviço systemd de usuário
-- **Linux (.deb)** — aliases disponíveis via `/etc/profile.d/activity-tracker.sh` (login shells)
 
 Após a instalação, dois aliases ficam disponíveis:
 
@@ -21,7 +20,13 @@ at   →  activity-tracker
 ats  →  activity-tracker summary
 ```
 
-Ou compile manualmente:
+Instalar em diretório customizado:
+
+```bash
+INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/omauriciomaciel/activity-tracker/main/install.sh | sh
+```
+
+Ou compilar a partir do fonte:
 
 ```bash
 cargo build --release
@@ -29,7 +34,6 @@ cargo build --release
 ```
 
 **Pré-requisitos:**
-- **Rust/Cargo** — [rustup.rs](https://rustup.rs)
 - **LLM** — Ollama local (`ollama serve`) ou API key de um provider cloud
 - Opcional: `wmctrl` para captura de janelas X11 (`sudo apt install wmctrl`)
 
@@ -117,7 +121,7 @@ at config show
 
 ```
 ┌──────────────────── ◄ 2026-06-12 (hoje) ► ────────────────────┐
-│           Atividades           │           Resumo              │
+│     Atividades     │      Resumo      │      Projetos         │
 ├───────────────────────────────────────────────────────────────┤
 │ ■ SHELL  (42 comandos)                                        │
 │ ─────────────────────────────────────────────────────────     │
@@ -135,13 +139,22 @@ at config show
 └───────────────────────────────────────────────────────────────┘
 ```
 
+A aba **Projetos** exibe distribuição de tempo por repositório:
+
+```
+  activity-tracker  ████████████████░░░░░░░░   67.3%  (12c, 5d)
+  meu-projeto       ████████░░░░░░░░░░░░░░░░   32.7%  ( 6c, 3d)
+```
+
 | Tecla | Ação |
 |---|---|
 | `←` / `→` | Navegar entre dias |
-| `Tab` / `1` / `2` | Alternar entre abas Atividades e Resumo |
+| `Tab` / `1` / `2` / `3` | Alternar entre abas Atividades, Resumo e Projetos |
 | `↑` / `↓` ou `j` / `k` | Rolar conteúdo |
 | `PgUp` / `PgDn` | Rolar rápido |
 | `r` | Gerar resumo via LLM (usa config salva) |
+| `s` | Na aba Projetos: janela de 7 dias |
+| `m` | Na aba Projetos: janela de 30 dias |
 | `q` / `Esc` | Sair |
 
 Aceita os mesmos flags de provider que o `summary` (`--provider`, `--model`, `--api-key`, `--lang`).
