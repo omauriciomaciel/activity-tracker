@@ -18,24 +18,28 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.target }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
+            name: ubuntu (x86_64)
             os: ubuntu-22.04
             deb_arch: amd64
             rust_arch: x86_64
           - target: aarch64-unknown-linux-gnu
+            name: ubuntu (aarch64)
             os: ubuntu-22.04
             deb_arch: arm64
             rust_arch: aarch64
             cross: true
           - target: x86_64-apple-darwin
+            name: macos (x86_64)
             os: macos-15-intel
           - target: aarch64-apple-darwin
+            name: macos (aarch64)
             os: macos-latest
 
     env:
@@ -46,8 +50,9 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
 
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
