@@ -8,10 +8,18 @@ Daemon em Rust que captura atividades do sistema (terminal, janelas abertas, aba
 ./install.sh
 ```
 
-O script compila o binário, instala em `~/.local/bin` e configura o autostart automaticamente:
+O script compila o binário, instala em `~/.local/bin`, configura o autostart automaticamente e adiciona os aliases ao seu shell:
 
 - **macOS** — cria um LaunchAgent em `~/Library/LaunchAgents/` e abre as telas de permissão necessárias
-- **Linux** — cria e ativa um serviço systemd de usuário
+- **Linux (systemd)** — cria e ativa um serviço systemd de usuário
+- **Linux (.deb)** — aliases disponíveis via `/etc/profile.d/activity-tracker.sh` (login shells)
+
+Após a instalação, dois aliases ficam disponíveis:
+
+```
+at   →  activity-tracker
+ats  →  activity-tracker summary
+```
 
 Ou compile manualmente:
 
@@ -39,51 +47,51 @@ cargo build --release
 O padrão é `ollama`. Para usar outro provider:
 
 ```bash
-activity-tracker config set-provider openai
-activity-tracker config set-api-key sk-...
-activity-tracker config set-model gpt-4o-mini
+at config set-provider openai
+at config set-api-key sk-...
+at config set-model gpt-4o-mini
 ```
 
 ## Uso
 
 ```bash
 # Daemon em background
-activity-tracker start                     # inicia em background
-activity-tracker start --interval 10       # intervalo customizado em minutos
-activity-tracker stop                      # para o daemon
-activity-tracker status                    # verifica se está rodando
+at start                     # inicia em background
+at start --interval 10       # intervalo customizado em minutos
+at stop                      # para o daemon
+at status                    # verifica se está rodando
 
 # Coleta manual única
-activity-tracker collect
+at collect
 
 # Resumo dos últimos N dias
-activity-tracker summary
-activity-tracker summary --days 7
-activity-tracker summary --today           # atalho para o dia de hoje
-activity-tracker summary --model gpt-4o-mini
-activity-tracker summary --lang en
-activity-tracker summary --verbose         # exibe dados brutos antes do resumo
+ats
+ats --days 7
+ats --today                  # atalho para o dia de hoje
+ats --model gpt-4o-mini
+ats --lang en
+ats --verbose                # exibe dados brutos antes do resumo
 
 # Resumo de uma data específica (formato YYYY-DD-MM)
-activity-tracker summary --date 2026-06-06
+ats --date 2026-06-06
 
 # Override de provider por sessão (sem alterar config)
-activity-tracker summary --provider anthropic --api-key sk-ant-... --model claude-haiku-4-5-20251001
-activity-tracker summary --provider groq --model llama-3.1-8b-instant
+ats --provider anthropic --api-key sk-ant-... --model claude-haiku-4-5-20251001
+ats --provider groq --model llama-3.1-8b-instant
 
 # Enviar resumo ao Notion
-activity-tracker summary --today --send-notion
+ats --today --send-notion
 
 # Configuração persistente
-activity-tracker config set-provider ollama       # ollama | openai | anthropic | groq | gemini | openrouter
-activity-tracker config set-model llama3.1
-activity-tracker config set-api-key <key>         # API key para providers cloud
-activity-tracker config set-url http://localhost:11434  # URL do Ollama (provider=ollama)
-activity-tracker config set-lang pt-br            # pt-br | en | es
-activity-tracker config set-notion-token secret_xxx
-activity-tracker config set-notion-page <page_id>
-activity-tracker config set-machine-name "MacBook Pro"  # opcional, usa hostname se omitido
-activity-tracker config show
+at config set-provider ollama       # ollama | openai | anthropic | groq | gemini | openrouter
+at config set-model llama3.1
+at config set-api-key <key>         # API key para providers cloud
+at config set-url http://localhost:11434  # URL do Ollama (provider=ollama)
+at config set-lang pt-br            # pt-br | en | es
+at config set-notion-token secret_xxx
+at config set-notion-page <page_id>
+at config set-machine-name "MacBook Pro"  # opcional, usa hostname se omitido
+at config show
 ```
 
 ## Autostart no login
@@ -135,7 +143,7 @@ activity-tracker config set-notion-page <page_id>   # ID após o último / na UR
 A partir daí, qualquer resumo pode ser enviado com `--send-notion`:
 
 ```bash
-activity-tracker summary --today --send-notion
+ats --today --send-notion
 ```
 
 O resumo é criado como subpágina da página configurada. O título da nota usa a data real e o nome da máquina, ex: `2026-06-09 — MacBook Pro`. Se `machine_name` não estiver configurado, usa o hostname do sistema.
@@ -147,7 +155,7 @@ O resumo é criado como subpágina da página configurada. O título da nota usa
 | **Shell history** | Bash, Zsh e Fish — leitura incremental (só novos comandos desde a última coleta) |
 | **Janelas abertas** | `wmctrl` (X11) → `xdotool` → `osascript` (macOS) → `ps` (fallback Linux) |
 | **Chrome / Brave** | DevTools Protocol (porta 9222) ou SQLite history DB (últimas 2 horas) |
-| **Git** | Último commit de cada repo encontrado até 4 níveis abaixo do home (máx. 15 repos) |
+| **Git** | Todos os commits do dia por repo, encontrados até 4 níveis abaixo do home (máx. 15 repos) |
 
 Comandos triviais são filtrados automaticamente (`ls`, `cd`, `clear`, `pwd`, etc.).
 
