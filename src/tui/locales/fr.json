@@ -1,0 +1,52 @@
+{
+  "tab.activities": "  Activités  ",
+  "tab.summary": "  Résumé  ",
+  "tab.projects": "  Projets  ",
+  "tab.config": "  Config  ",
+
+  "today": "aujourd'hui",
+
+  "hint.prev_day": "← jour",
+  "hint.both_days": "←/→ jour",
+  "hint.tab": "Tab onglet",
+  "hint.summary": "r résumé",
+  "hint.regenerate": "r régénérer",
+  "hint.quit": "q quitter",
+  "hint.week_month": "s semaine  m mois",
+  "hint.config_editing": " Enter enregistrer  Esc annuler ",
+  "hint.config_browse": " ↑↓/jk naviguer  Enter/e éditer  ← → cycler  d supprimer filtre  R recharger  q quitter ",
+
+  "block.activities": " Activités Brutes ",
+  "section.shell": "■ SHELL  ({n} commandes)",
+  "section.apps": "■ APPS  ({n} fenêtres)",
+  "section.sites": "■ SITES  ({n} onglets)",
+  "section.git": "■ GIT  ({repos} dépôts, {commits} commits)",
+  "section.notes": "■ NOTES  ({n} événement(s))",
+  "no_log": "\n\n  Aucun journal trouvé pour cette date.\n\n  Utilisez ← → pour naviguer entre les jours.",
+
+  "projects.window_7": "7 jours",
+  "projects.window_30": "30 jours",
+  "projects.title": " Projets — {label} ",
+  "loading": "\n\n  Chargement...",
+  "no_commits": "\n\n  Aucun commit trouvé pour la période.\n\n  Le daemon doit être en cours d'exécution pour collecter les données git.",
+
+  "block.summary": " Résumé LLM ",
+  "summary.prompt_hint": "\n\n  Appuyez sur r pour générer le résumé.\n\n  Fournisseur : {provider}/{model}",
+  "summary.no_data": "\n\n  Aucune donnée pour cette date.",
+  "summary.generating": "\n\n  {frame} Génération du résumé avec {provider}/{model}...",
+  "summary.saved_hint": " enregistré · r pour régénérer ",
+  "summary.error": "\n  Erreur : {e}",
+
+  "block.config": " Configuration ",
+  "section.machine": "MACHINE",
+  "section.integrations": "INTÉGRATIONS",
+  "section.privacy": "CONFIDENTIALITÉ",
+  "field.model": "modèle",
+  "field.lang": "langue",
+  "field.name": "nom",
+  "not_configured": "non configuré",
+  "add_pattern": "+ ajouter un filtre…",
+  "delete_hint": "  d supprimer",
+  "prompt.editing_hint": "   [Enter = confirmer  •  \\n = saut de ligne  •  Esc = annuler]",
+  "prompt.browse_hint": "   [Enter pour éditer  •  \\n = saut de ligne]"
+}

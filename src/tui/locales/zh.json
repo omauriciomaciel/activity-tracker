@@ -1,0 +1,52 @@
+{
+  "tab.activities": "  活动  ",
+  "tab.summary": "  摘要  ",
+  "tab.projects": "  项目  ",
+  "tab.config": "  设置  ",
+
+  "today": "今天",
+
+  "hint.prev_day": "← 前一天",
+  "hint.both_days": "←/→ 切换日期",
+  "hint.tab": "Tab 标签页",
+  "hint.summary": "r 摘要",
+  "hint.regenerate": "r 重新生成",
+  "hint.quit": "q 退出",
+  "hint.week_month": "s 一周  m 一月",
+  "hint.config_editing": " Enter 保存  Esc 取消 ",
+  "hint.config_browse": " ↑↓/jk 导航  Enter/e 编辑  ← → 切换  d 删除规则  R 重新加载  q 退出 ",
+
+  "block.activities": " 原始活动 ",
+  "section.shell": "■ SHELL  ({n} 条命令)",
+  "section.apps": "■ APPS  ({n} 个窗口)",
+  "section.sites": "■ SITES  ({n} 个标签页)",
+  "section.git": "■ GIT  ({repos} 个仓库, {commits} 次提交)",
+  "section.notes": "■ 备注  ({n} 条)",
+  "no_log": "\n\n  未找到该日期的日志。\n\n  使用 ← → 在日期间导航。",
+
+  "projects.window_7": "7天",
+  "projects.window_30": "30天",
+  "projects.title": " 项目 — {label} ",
+  "loading": "\n\n  加载中...",
+  "no_commits": "\n\n  该时段未找到提交记录。\n\n  需要守护进程运行才能收集 Git 数据。",
+
+  "block.summary": " LLM 摘要 ",
+  "summary.prompt_hint": "\n\n  按 r 生成摘要。\n\n  提供商：{provider}/{model}",
+  "summary.no_data": "\n\n  该日期没有数据。",
+  "summary.generating": "\n\n  {frame} 正在使用 {provider}/{model} 生成摘要...",
+  "summary.saved_hint": " 已保存 · r 重新生成 ",
+  "summary.error": "\n  错误：{e}",
+
+  "block.config": " 设置 ",
+  "section.machine": "设备",
+  "section.integrations": "集成",
+  "section.privacy": "隐私",
+  "field.model": "模型",
+  "field.lang": "语言",
+  "field.name": "名称",
+  "not_configured": "未配置",
+  "add_pattern": "+ 添加规则…",
+  "delete_hint": "  d 删除",
+  "prompt.editing_hint": "   [Enter = 确认  •  \\n = 换行  •  Esc = 取消]",
+  "prompt.browse_hint": "   [Enter 编辑  •  \\n = 换行]"
+}

@@ -1,0 +1,52 @@
+{
+  "tab.activities": "  Aktivitäten  ",
+  "tab.summary": "  Zusammenfassung  ",
+  "tab.projects": "  Projekte  ",
+  "tab.config": "  Einstellungen  ",
+
+  "today": "heute",
+
+  "hint.prev_day": "← Tag",
+  "hint.both_days": "←/→ Tag",
+  "hint.tab": "Tab Reiter",
+  "hint.summary": "r Zusammenfassung",
+  "hint.regenerate": "r regenerieren",
+  "hint.quit": "q beenden",
+  "hint.week_month": "s Woche  m Monat",
+  "hint.config_editing": " Enter speichern  Esc abbrechen ",
+  "hint.config_browse": " ↑↓/jk navigieren  Enter/e bearbeiten  ← → wechseln  d Filter löschen  R neu laden  q beenden ",
+
+  "block.activities": " Rohe Aktivitäten ",
+  "section.shell": "■ SHELL  ({n} Befehle)",
+  "section.apps": "■ APPS  ({n} Fenster)",
+  "section.sites": "■ SITES  ({n} Tabs)",
+  "section.git": "■ GIT  ({repos} Repos, {commits} Commits)",
+  "section.notes": "■ NOTIZEN  ({n} Eintrag/Einträge)",
+  "no_log": "\n\n  Kein Protokoll für dieses Datum gefunden.\n\n  Verwenden Sie ← → um zwischen den Tagen zu navigieren.",
+
+  "projects.window_7": "7 Tage",
+  "projects.window_30": "30 Tage",
+  "projects.title": " Projekte — {label} ",
+  "loading": "\n\n  Laden...",
+  "no_commits": "\n\n  Keine Commits im Zeitraum gefunden.\n\n  Der Daemon muss laufen, um Git-Daten zu erfassen.",
+
+  "block.summary": " LLM-Zusammenfassung ",
+  "summary.prompt_hint": "\n\n  Drücken Sie r, um die Zusammenfassung zu erstellen.\n\n  Anbieter: {provider}/{model}",
+  "summary.no_data": "\n\n  Keine Daten für dieses Datum.",
+  "summary.generating": "\n\n  {frame} Zusammenfassung wird mit {provider}/{model} erstellt...",
+  "summary.saved_hint": " gespeichert · r zum Regenerieren ",
+  "summary.error": "\n  Fehler: {e}",
+
+  "block.config": " Einstellungen ",
+  "section.machine": "GERÄT",
+  "section.integrations": "INTEGRATIONEN",
+  "section.privacy": "DATENSCHUTZ",
+  "field.model": "Modell",
+  "field.lang": "Sprache",
+  "field.name": "Name",
+  "not_configured": "nicht konfiguriert",
+  "add_pattern": "+ Filter hinzufügen…",
+  "delete_hint": "  d löschen",
+  "prompt.editing_hint": "   [Enter = bestätigen  •  \\n = Zeilenumbruch  •  Esc = abbrechen]",
+  "prompt.browse_hint": "   [Enter zum Bearbeiten  •  \\n = Zeilenumbruch]"
+}

@@ -1,0 +1,52 @@
+{
+  "tab.activities": "  Actividades  ",
+  "tab.summary": "  Resumen  ",
+  "tab.projects": "  Proyectos  ",
+  "tab.config": "  Config  ",
+
+  "today": "hoy",
+
+  "hint.prev_day": "← día",
+  "hint.both_days": "←/→ día",
+  "hint.tab": "Tab pestaña",
+  "hint.summary": "r resumen",
+  "hint.regenerate": "r regenerar",
+  "hint.quit": "q salir",
+  "hint.week_month": "s semana  m mes",
+  "hint.config_editing": " Enter guardar  Esc cancelar ",
+  "hint.config_browse": " ↑↓/jk navegar  Enter/e editar  ← → ciclar  d eliminar patrón  R recargar  q salir ",
+
+  "block.activities": " Actividades Brutas ",
+  "section.shell": "■ SHELL  ({n} comandos)",
+  "section.apps": "■ APPS  ({n} ventanas)",
+  "section.sites": "■ SITES  ({n} pestañas)",
+  "section.git": "■ GIT  ({repos} repos, {commits} commits)",
+  "section.notes": "■ NOTAS  ({n} evento(s))",
+  "no_log": "\n\n  No se encontró registro para esta fecha.\n\n  Use ← → para navegar entre los días.",
+
+  "projects.window_7": "7 días",
+  "projects.window_30": "30 días",
+  "projects.title": " Proyectos — {label} ",
+  "loading": "\n\n  Cargando...",
+  "no_commits": "\n\n  No se encontraron commits en el período.\n\n  El daemon debe estar en ejecución para recopilar datos de git.",
+
+  "block.summary": " Resumen LLM ",
+  "summary.prompt_hint": "\n\n  Presione r para generar el resumen.\n\n  Proveedor: {provider}/{model}",
+  "summary.no_data": "\n\n  Sin datos para esta fecha.",
+  "summary.generating": "\n\n  {frame} Generando resumen con {provider}/{model}...",
+  "summary.saved_hint": " guardado · r para regenerar ",
+  "summary.error": "\n  Error: {e}",
+
+  "block.config": " Configuración ",
+  "section.machine": "MÁQUINA",
+  "section.integrations": "INTEGRACIONES",
+  "section.privacy": "PRIVACIDAD",
+  "field.model": "modelo",
+  "field.lang": "idioma",
+  "field.name": "nombre",
+  "not_configured": "no configurado",
+  "add_pattern": "+ agregar patrón…",
+  "delete_hint": "  d eliminar",
+  "prompt.editing_hint": "   [Enter = confirmar  •  \\n = salto de línea  •  Esc = cancelar]",
+  "prompt.browse_hint": "   [Enter para editar  •  \\n = salto de línea]"
+}

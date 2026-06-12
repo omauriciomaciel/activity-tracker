@@ -1,0 +1,52 @@
+{
+  "tab.activities": "  アクティビティ  ",
+  "tab.summary": "  サマリー  ",
+  "tab.projects": "  プロジェクト  ",
+  "tab.config": "  設定  ",
+
+  "today": "今日",
+
+  "hint.prev_day": "← 前の日",
+  "hint.both_days": "←/→ 日付",
+  "hint.tab": "Tab タブ",
+  "hint.summary": "r サマリー",
+  "hint.regenerate": "r 再生成",
+  "hint.quit": "q 終了",
+  "hint.week_month": "s 週  m 月",
+  "hint.config_editing": " Enter 保存  Esc キャンセル ",
+  "hint.config_browse": " ↑↓/jk 移動  Enter/e 編集  ← → 切替  d パターン削除  R 再読込  q 終了 ",
+
+  "block.activities": " 生アクティビティ ",
+  "section.shell": "■ SHELL  ({n} コマンド)",
+  "section.apps": "■ APPS  ({n} ウィンドウ)",
+  "section.sites": "■ SITES  ({n} タブ)",
+  "section.git": "■ GIT  ({repos} リポジトリ, {commits} コミット)",
+  "section.notes": "■ メモ  ({n} 件)",
+  "no_log": "\n\n  この日付のログが見つかりません。\n\n  ← → で日付を移動してください。",
+
+  "projects.window_7": "7日間",
+  "projects.window_30": "30日間",
+  "projects.title": " プロジェクト — {label} ",
+  "loading": "\n\n  読み込み中...",
+  "no_commits": "\n\n  この期間にコミットが見つかりません。\n\n  Gitデータを収集するにはデーモンを起動してください。",
+
+  "block.summary": " LLMサマリー ",
+  "summary.prompt_hint": "\n\n  r を押してサマリーを生成します。\n\n  プロバイダー: {provider}/{model}",
+  "summary.no_data": "\n\n  この日付のデータはありません。",
+  "summary.generating": "\n\n  {frame} {provider}/{model} でサマリーを生成中...",
+  "summary.saved_hint": " 保存済み · r で再生成 ",
+  "summary.error": "\n  エラー: {e}",
+
+  "block.config": " 設定 ",
+  "section.machine": "マシン",
+  "section.integrations": "連携",
+  "section.privacy": "プライバシー",
+  "field.model": "モデル",
+  "field.lang": "言語",
+  "field.name": "名前",
+  "not_configured": "未設定",
+  "add_pattern": "+ パターンを追加…",
+  "delete_hint": "  d 削除",
+  "prompt.editing_hint": "   [Enter = 確定  •  \\n = 改行  •  Esc = キャンセル]",
+  "prompt.browse_hint": "   [Enter で編集  •  \\n = 改行]"
+}

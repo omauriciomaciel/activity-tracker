@@ -8,6 +8,11 @@ impl Ui {
     pub fn new(lang: &str) -> Self {
         let json = match lang {
             "en" => include_str!("locales/en.json"),
+            "es" => include_str!("locales/es.json"),
+            "fr" => include_str!("locales/fr.json"),
+            "de" => include_str!("locales/de.json"),
+            "ja" => include_str!("locales/ja.json"),
+            "zh" => include_str!("locales/zh.json"),
             _ => include_str!("locales/pt-br.json"),
         };
         Self {
