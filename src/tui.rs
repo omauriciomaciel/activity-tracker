@@ -734,6 +734,72 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(p, area);
 }
 
+fn parse_inline(text: &str) -> Vec<Span<'static>> {
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut remaining = text.to_string();
+    while !remaining.is_empty() {
+        if let Some(start) = remaining.find("**") {
+            if start > 0 {
+                spans.push(Span::raw(remaining[..start].to_string()));
+            }
+            let rest = remaining[start + 2..].to_string();
+            if let Some(end) = rest.find("**") {
+                spans.push(Span::styled(
+                    rest[..end].to_string(),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ));
+                remaining = rest[end + 2..].to_string();
+            } else {
+                spans.push(Span::raw(format!("**{rest}")));
+                remaining = String::new();
+            }
+        } else {
+            spans.push(Span::raw(remaining.clone()));
+            remaining = String::new();
+        }
+    }
+    spans
+}
+
+fn markdown_to_lines(text: &str) -> Vec<Line<'static>> {
+    text.lines()
+        .map(|line| {
+            if line.starts_with("### ") {
+                Line::from(Span::styled(
+                    line[4..].to_string(),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ))
+            } else if line.starts_with("## ") {
+                Line::from(Span::styled(
+                    line[3..].to_string(),
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                ))
+            } else if line.starts_with("# ") {
+                Line::from(Span::styled(
+                    line[2..].to_string(),
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                ))
+            } else if let Some(rest) = line.strip_prefix("    - ").or_else(|| line.strip_prefix("    * ")) {
+                let mut spans = vec![Span::styled("      ◦ ", Style::default().fg(Color::DarkGray))];
+                spans.extend(parse_inline(rest));
+                Line::from(spans)
+            } else if let Some(rest) = line.strip_prefix("  - ").or_else(|| line.strip_prefix("  * ")) {
+                let mut spans = vec![Span::styled("    • ", Style::default().fg(Color::DarkGray))];
+                spans.extend(parse_inline(rest));
+                Line::from(spans)
+            } else if let Some(rest) = line.strip_prefix("- ").or_else(|| line.strip_prefix("* ")) {
+                let mut spans = vec![Span::styled("  • ", Style::default().fg(Color::DarkGray))];
+                spans.extend(parse_inline(rest));
+                Line::from(spans)
+            } else if line.trim().is_empty() {
+                Line::from("")
+            } else {
+                Line::from(parse_inline(line))
+            }
+        })
+        .collect()
+}
+
 fn render_summary(f: &mut Frame, app: &App, area: Rect) {
     match &app.summary {
         SummaryState::Empty => {
@@ -771,20 +837,18 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
                     " salvo · r para regenerar ",
                     Style::default().fg(Color::DarkGray),
                 ));
-            let p = Paragraph::new(text.as_str())
+            let p = Paragraph::new(markdown_to_lines(text))
                 .block(block)
                 .scroll((app.scroll, 0))
-                .wrap(Wrap { trim: false })
-                .style(Style::default().fg(Color::White));
+                .wrap(Wrap { trim: false });
             f.render_widget(p, area);
         }
         SummaryState::Done(text) => {
             let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
-            let p = Paragraph::new(text.as_str())
+            let p = Paragraph::new(markdown_to_lines(text))
                 .block(block)
                 .scroll((app.scroll, 0))
-                .wrap(Wrap { trim: false })
-                .style(Style::default().fg(Color::White));
+                .wrap(Wrap { trim: false });
             f.render_widget(p, area);
         }
         SummaryState::Error(e) => {
