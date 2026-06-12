@@ -48,12 +48,12 @@ struct GitEntry {
 
 // ─── Dados agregados ─────────────────────────────
 
-struct ActivityData {
-    dates: Vec<String>,
-    commands: Vec<String>,
-    top_apps: Vec<(String, u32)>,
-    tabs: Vec<(String, String)>,       // (title, url)
-    repos: Vec<(String, Vec<String>)>, // (path, commits)
+pub struct ActivityData {
+    pub dates: Vec<String>,
+    pub commands: Vec<String>,
+    pub top_apps: Vec<(String, u32)>,
+    pub tabs: Vec<(String, String)>,       // (title, url)
+    pub repos: Vec<(String, Vec<String>)>, // (path, commits)
 }
 
 // ─── Structs de API ──────────────────────────────
@@ -177,7 +177,6 @@ pub struct RunOptions<'a> {
     pub lang: &'a str,
     pub machine_name: &'a str,
     pub notion: Option<(&'a str, &'a str)>,
-    pub verbose: bool,
     pub search: Option<&'a str>,
 }
 
@@ -192,7 +191,6 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
         lang,
         machine_name,
         notion,
-        verbose,
         search,
     } = opts;
     let log_dir = config::log_dir();
@@ -249,14 +247,6 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
     };
     let context = build_context(&data);
 
-    if verbose {
-        println!(
-            "\n{}\n{context}\n{}\n",
-            "--- Contexto enviado ao LLM ---".dimmed(),
-            "---".dimmed()
-        );
-    }
-
     println!(
         "{}",
         format!("Enviando para {provider} (modelo: {model})...").dimmed()
@@ -307,6 +297,21 @@ fn find_log_files(log_dir: &std::path::Path, days: u32) -> Vec<PathBuf> {
             path.exists().then_some(path)
         })
         .collect()
+}
+
+pub fn load_for_date(date: chrono::NaiveDate) -> Result<ActivityData> {
+    let log_dir = config::log_dir();
+    let path = log_dir.join(format!("{}.jsonl", date.format("%Y-%m-%d")));
+    if !path.exists() {
+        return Ok(ActivityData {
+            dates: vec![],
+            commands: vec![],
+            top_apps: vec![],
+            tabs: vec![],
+            repos: vec![],
+        });
+    }
+    aggregate(&[path])
 }
 
 fn is_noise_command(cmd: &str) -> bool {
@@ -616,7 +621,7 @@ fn scrub_secrets(cmd: &str) -> String {
 }
 
 /// Constrói o contexto como texto plano — muito mais compacto que JSON pretty-printed.
-fn build_context(data: &ActivityData) -> String {
+pub(crate) fn build_context(data: &ActivityData) -> String {
     let mut out = String::new();
 
     out.push_str(&format!("Período: {}\n\n", data.dates.join(", ")));
@@ -730,7 +735,7 @@ fn build_prompt(context: &str, lang: &str) -> String {
     )
 }
 
-async fn call_llm(
+pub(crate) async fn call_llm(
     provider: &str,
     ollama_url: &str,
     api_key: Option<&str>,

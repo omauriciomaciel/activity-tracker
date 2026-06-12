@@ -3,6 +3,7 @@ mod config;
 mod daemon;
 mod notion;
 mod summarizer;
+mod tui;
 mod updater;
 
 use anyhow::Result;
@@ -88,10 +89,6 @@ enum Commands {
         /// Enviar resumo ao Notion após gerar
         #[arg(long)]
         send_notion: bool,
-
-        /// Mostrar dados brutos
-        #[arg(long)]
-        verbose: bool,
     },
 
     /// Exporta logs de atividade em CSV ou JSON
@@ -111,6 +108,29 @@ enum Commands {
         /// Arquivo de saída (padrão: stdout)
         #[arg(short, long)]
         output: Option<String>,
+    },
+
+    /// TUI interativa: navegar dias, ver atividades brutas, gerar resumo
+    Tui {
+        /// Modelo a usar (sobrescreve o padrão salvo)
+        #[arg(short, long)]
+        model: Option<String>,
+
+        /// Provider de LLM: ollama, openai, anthropic, groq, gemini, openrouter
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// URL do Ollama (apenas para provider=ollama)
+        #[arg(long)]
+        ollama_url: Option<String>,
+
+        /// API key do provider (sobrescreve o padrão salvo)
+        #[arg(long)]
+        api_key: Option<String>,
+
+        /// Idioma do resumo
+        #[arg(long)]
+        lang: Option<String>,
     },
 
     /// Remove entradas fora da data de cada arquivo de log
@@ -218,6 +238,28 @@ async fn main() -> Result<()> {
             summarizer::export_cmd(days, date.as_deref(), &format, output.as_deref())?;
         }
 
+        Commands::Tui {
+            model,
+            provider,
+            ollama_url,
+            api_key,
+            lang,
+        } => {
+            let model = model.unwrap_or_else(|| cfg.model.clone());
+            let provider = provider.unwrap_or_else(|| cfg.provider.clone());
+            let url = ollama_url.unwrap_or_else(|| cfg.ollama_url.clone());
+            let api_key = api_key.or_else(|| cfg.api_key.clone());
+            let lang = lang.unwrap_or_else(|| cfg.lang.clone());
+            tui::run(tui::TuiOptions {
+                model,
+                provider,
+                ollama_url: url,
+                api_key,
+                lang,
+            })
+            .await?;
+        }
+
         Commands::Summary {
             mut days,
             mut date,
@@ -231,7 +273,6 @@ async fn main() -> Result<()> {
             month,
             search,
             send_notion,
-            verbose,
         } => {
             if today {
                 days = 1;
@@ -273,7 +314,6 @@ async fn main() -> Result<()> {
                 lang: &lang,
                 machine_name: &machine,
                 notion: notion.as_ref().map(|(t, p)| (t.as_str(), p.as_str())),
-                verbose,
                 search: search.as_deref(),
             })
             .await?;
