@@ -40,7 +40,7 @@ pub struct ContextData {
 #[derive(Serialize)]
 pub struct GitRepoInfo {
     pub repo: String,
-    pub last_commit: String,
+    pub commits: Vec<String>,
 }
 
 // ─── Ponto de entrada ───────────────────────────
@@ -540,23 +540,26 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
                 continue;
             }
 
+            let since = today.format("%Y-%m-%d").to_string();
             if let Ok(log_out) = Command::new("git")
-                .args(["-C", repo_dir, "log", "-1", "--format=%ai %s"])
+                .args([
+                    "-C",
+                    repo_dir,
+                    "log",
+                    &format!("--since={} 00:00:00", since),
+                    "--format=%ai %s",
+                ])
                 .output()
             {
-                let msg = String::from_utf8_lossy(&log_out.stdout).trim().to_string();
-                if msg.is_empty() {
-                    continue;
-                }
-
-                // Só inclui repos com commit de hoje: "YYYY-MM-DD HH:MM:SS ..."
-                let commit_date = msg
-                    .get(..10)
-                    .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-                if commit_date.map(|d| d == today).unwrap_or(false) {
+                let commits: Vec<String> = String::from_utf8_lossy(&log_out.stdout)
+                    .lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect();
+                if !commits.is_empty() {
                     repos.push(GitRepoInfo {
                         repo: repo_dir.to_string(),
-                        last_commit: msg,
+                        commits,
                     });
                 }
             }
@@ -644,11 +647,20 @@ fn clean_log_file(path: &Path, date: NaiveDate) -> Result<usize> {
                     let kept: Vec<serde_json::Value> = repos
                         .into_iter()
                         .filter(|r| {
-                            let commit = r["last_commit"].as_str().unwrap_or("");
-                            commit
-                                .get(..10)
-                                .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-                                .map(|d| d == date)
+                            // Keep repos that have at least one commit on the target date
+                            r["commits"]
+                                .as_array()
+                                .map(|arr| {
+                                    arr.iter().any(|c| {
+                                        c.as_str()
+                                            .and_then(|s| s.get(..10))
+                                            .and_then(|s| {
+                                                NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+                                            })
+                                            .map(|d| d == date)
+                                            .unwrap_or(false)
+                                    })
+                                })
                                 .unwrap_or(false)
                         })
                         .collect();

@@ -39,6 +39,10 @@ struct CtxData {
 #[derive(Deserialize)]
 struct GitEntry {
     repo: String,
+    #[serde(default)]
+    commits: Vec<String>,
+    // backward compat: old logs have last_commit string
+    #[serde(default)]
     last_commit: String,
 }
 
@@ -48,8 +52,8 @@ struct ActivityData {
     dates: Vec<String>,
     commands: Vec<String>,
     top_apps: Vec<(String, u32)>,
-    tabs: Vec<(String, String)>,  // (title, url)
-    repos: Vec<(String, String)>, // (path, last_commit)
+    tabs: Vec<(String, String)>,       // (title, url)
+    repos: Vec<(String, Vec<String>)>, // (path, commits)
 }
 
 // ─── Structs de API ──────────────────────────────
@@ -324,8 +328,7 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
     let mut app_counts: HashMap<String, u32> = HashMap::new();
     let mut seen_urls: HashSet<String> = HashSet::new();
     let mut tabs: Vec<(String, String)> = Vec::new();
-    // Dedup repos por path, mantendo o commit mais recente (primeiro encontrado = mais recente no JSONL)
-    let mut repo_map: HashMap<String, String> = HashMap::new();
+    let mut repo_map: HashMap<String, Vec<String>> = HashMap::new();
     let mut dates: Vec<String> = Vec::new();
 
     for file in files {
@@ -376,16 +379,29 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
                 }
                 Ok(LogEntry::Context { data }) => {
                     for r in data.git_repos {
-                        // Filtra repos cujo commit não pertence à data do arquivo
-                        if let Some(file_date) = file_date {
-                            let commit_date = r.last_commit.get(..10).and_then(|s| {
-                                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
-                            });
-                            if commit_date.map(|d| d != file_date).unwrap_or(false) {
-                                continue;
+                        // Merge commits list (new format) or fall back to last_commit (old format)
+                        let incoming: Vec<String> = if !r.commits.is_empty() {
+                            r.commits
+                        } else if !r.last_commit.is_empty() {
+                            vec![r.last_commit]
+                        } else {
+                            continue;
+                        };
+
+                        let entry = repo_map.entry(r.repo).or_default();
+                        for c in incoming {
+                            if let Some(file_date) = file_date {
+                                let commit_date = c.get(..10).and_then(|s| {
+                                    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+                                });
+                                if commit_date.map(|d| d != file_date).unwrap_or(false) {
+                                    continue;
+                                }
+                            }
+                            if !entry.contains(&c) {
+                                entry.push(c);
                             }
                         }
-                        repo_map.entry(r.repo).or_insert(r.last_commit);
                     }
                 }
                 Err(_) => {}
@@ -399,9 +415,16 @@ fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
 
     tabs.truncate(30);
 
-    let mut repos: Vec<(String, String)> = repo_map.into_iter().collect();
-    // Ordenar por data do commit (string ISO, ordenação lexicográfica funciona)
-    repos.sort_by(|a, b| b.1.cmp(&a.1));
+    let mut repos: Vec<(String, Vec<String>)> = repo_map
+        .into_iter()
+        .filter(|(_, commits)| !commits.is_empty())
+        .collect();
+    // Sort by most recent commit across all commits for the repo
+    repos.sort_by(|a, b| {
+        let latest_a = a.1.iter().max().map(|s| s.as_str()).unwrap_or("");
+        let latest_b = b.1.iter().max().map(|s| s.as_str()).unwrap_or("");
+        latest_b.cmp(latest_a)
+    });
 
     Ok(ActivityData {
         dates,
@@ -525,13 +548,15 @@ fn build_context(data: &ActivityData) -> String {
 
     if !data.repos.is_empty() {
         out.push_str("=== REPOSITÓRIOS GIT ===\n");
-        for (repo, commit) in &data.repos {
-            // Mostrar só o nome do repo, não o path completo
+        for (repo, commits) in &data.repos {
             let name = std::path::Path::new(repo)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or(repo);
-            out.push_str(&format!("  {name}: {commit}\n"));
+            out.push_str(&format!("  {name}:\n"));
+            for commit in commits {
+                out.push_str(&format!("    - {commit}\n"));
+            }
         }
         out.push('\n');
     }
