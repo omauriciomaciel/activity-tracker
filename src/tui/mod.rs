@@ -21,6 +21,7 @@ use crate::summarizer::{self, ActivityData};
 
 mod config;
 mod edit;
+pub(super) mod i18n;
 mod render;
 mod render_config;
 

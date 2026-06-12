@@ -11,9 +11,11 @@ use super::{
     CF_NOTION_TOKEN, CF_PROMPT, CF_PROVIDER, CF_SLACK, CF_URL_OR_KEY,
 };
 use super::edit::edit_render_cursor;
+use super::i18n::Ui;
 use crate::summarizer;
 
 pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
+    let ui = Ui::new(&app.config.lang);
     let cfg = &app.config;
     let cur = app.config_cursor;
     let edit_buf: Option<(&str, usize)> = match &app.config_edit {
@@ -23,7 +25,7 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Configuração ");
+        .title(ui.t("block.config"));
 
     let mut lines: Vec<Line> = Vec::new();
     let mut row_map: Vec<usize> = Vec::new();
@@ -106,9 +108,10 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
     push!(section_line("LLM"), usize::MAX);
     push!(sep_line(), usize::MAX);
     push!(field_row(CF_PROVIDER, "provider", &cfg.provider, true), CF_PROVIDER);
-    push!(field_row(CF_MODEL, "modelo", &cfg.model, false), CF_MODEL);
+    push!(field_row(CF_MODEL, ui.t("field.model"), &cfg.model, false), CF_MODEL);
 
     let url_label = if cfg.provider == "ollama" { "url" } else { "api_key" };
+    let not_cfg = ui.t("not_configured");
     let url_val = if cfg.provider == "ollama" {
         cfg.ollama_url.clone()
     } else {
@@ -122,10 +125,10 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
                     format!("{}…{}", &k[..4], &k[n - 4..])
                 }
             })
-            .unwrap_or_else(|| "não configurado".into())
+            .unwrap_or_else(|| not_cfg.to_string())
     };
     push!(field_row(CF_URL_OR_KEY, url_label, &url_val, false), CF_URL_OR_KEY);
-    push!(field_row(CF_LANG, "idioma", &cfg.lang, true), CF_LANG);
+    push!(field_row(CF_LANG, ui.t("field.lang"), &cfg.lang, true), CF_LANG);
 
     // CF_PROMPT: multi-line rendering
     {
@@ -167,7 +170,7 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
                 }
             }
             push!(Line::from(Span::styled(
-                "   [Enter = confirma  •  \\n = quebra de linha  •  Esc = cancela]",
+                ui.t("prompt.editing_hint"),
                 Style::default().fg(Color::DarkGray),
             )), usize::MAX);
         } else {
@@ -196,7 +199,7 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
 
             if prompt_selected {
                 push!(Line::from(Span::styled(
-                    "   [Enter para editar  •  \\n = quebra de linha]",
+                    ui.t("prompt.browse_hint"),
                     Style::default().fg(Color::DarkGray),
                 )), usize::MAX);
             }
@@ -205,11 +208,11 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
     push!(Line::from(""), usize::MAX);
 
     // ── MÁQUINA ───────────────────────────────────────────────────────────────
-    push!(section_line("MÁQUINA"), usize::MAX);
+    push!(section_line(ui.t("section.machine")), usize::MAX);
     push!(sep_line(), usize::MAX);
     push!(field_row(
         CF_MACHINE,
-        "nome",
+        ui.t("field.name"),
         &cfg.machine_name
             .clone()
             .unwrap_or_else(|| cfg.get_machine_name()),
@@ -218,7 +221,7 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
     push!(Line::from(""), usize::MAX);
 
     // ── INTEGRAÇÕES ───────────────────────────────────────────────────────────
-    push!(section_line("INTEGRAÇÕES"), usize::MAX);
+    push!(section_line(ui.t("section.integrations")), usize::MAX);
     push!(sep_line(), usize::MAX);
     let notion_token_val = cfg
         .notion_token
@@ -231,9 +234,9 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
                 format!("{}…{}", &k[..4], &k[n - 4..])
             }
         })
-        .unwrap_or_else(|| "não configurado".into());
+        .unwrap_or_else(|| not_cfg.to_string());
     push!(field_row(CF_NOTION_TOKEN, "notion_token", &notion_token_val, false), CF_NOTION_TOKEN);
-    let notion_page_val = cfg.notion_page_id.as_deref().unwrap_or("não configurado");
+    let notion_page_val = cfg.notion_page_id.as_deref().unwrap_or(not_cfg);
     push!(field_row(CF_NOTION_PAGE, "notion_page", notion_page_val, false), CF_NOTION_PAGE);
     let slack_val = cfg
         .slack_webhook
@@ -245,12 +248,12 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
                 u.to_string()
             }
         })
-        .unwrap_or_else(|| "não configurado".into());
+        .unwrap_or_else(|| not_cfg.to_string());
     push!(field_row(CF_SLACK, "slack_webhook", &slack_val, false), CF_SLACK);
     push!(Line::from(""), usize::MAX);
 
     // ── PRIVACIDADE ───────────────────────────────────────────────────────────
-    push!(section_line("PRIVACIDADE"), usize::MAX);
+    push!(section_line(ui.t("section.privacy")), usize::MAX);
     push!(sep_line(), usize::MAX);
 
     let add_selected = cur == CF_ADD_BLOCK;
@@ -275,7 +278,7 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
         )
     } else {
         Span::styled(
-            "+ adicionar padrão…",
+            ui.t("add_pattern"),
             if add_selected {
                 Style::default()
                     .fg(Color::Green)
@@ -320,7 +323,7 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
             )
         };
         let del_hint = if sel && !ed {
-            Span::styled("  d deletar", Style::default().fg(Color::DarkGray))
+            Span::styled(ui.t("delete_hint"), Style::default().fg(Color::DarkGray))
         } else {
             Span::raw("")
         };

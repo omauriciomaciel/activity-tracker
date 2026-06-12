@@ -1,0 +1,52 @@
+{
+  "tab.activities": "  Activities  ",
+  "tab.summary": "  Summary  ",
+  "tab.projects": "  Projects  ",
+  "tab.config": "  Config  ",
+
+  "today": "today",
+
+  "hint.prev_day": "← day",
+  "hint.both_days": "←/→ day",
+  "hint.tab": "Tab tab",
+  "hint.summary": "r summary",
+  "hint.regenerate": "r regenerate",
+  "hint.quit": "q quit",
+  "hint.week_month": "s week  m month",
+  "hint.config_editing": " Enter save  Esc cancel ",
+  "hint.config_browse": " ↑↓/jk navigate  Enter/e edit  ← → cycle  d delete pattern  R reload  q quit ",
+
+  "block.activities": " Raw Activities ",
+  "section.shell": "■ SHELL  ({n} commands)",
+  "section.apps": "■ APPS  ({n} windows)",
+  "section.sites": "■ SITES  ({n} tabs)",
+  "section.git": "■ GIT  ({repos} repos, {commits} commits)",
+  "section.notes": "■ NOTES  ({n} event(s))",
+  "no_log": "\n\n  No log found for this date.\n\n  Use ← → to navigate between days.",
+
+  "projects.window_7": "7 days",
+  "projects.window_30": "30 days",
+  "projects.title": " Projects — {label} ",
+  "loading": "\n\n  Loading...",
+  "no_commits": "\n\n  No commits found for this period.\n\n  The daemon needs to be running to collect git data.",
+
+  "block.summary": " LLM Summary ",
+  "summary.prompt_hint": "\n\n  Press r to generate the summary.\n\n  Provider: {provider}/{model}",
+  "summary.no_data": "\n\n  No data for this date.",
+  "summary.generating": "\n\n  {frame} Generating summary with {provider}/{model}...",
+  "summary.saved_hint": " saved · r to regenerate ",
+  "summary.error": "\n  Error: {e}",
+
+  "block.config": " Configuration ",
+  "section.machine": "MACHINE",
+  "section.integrations": "INTEGRATIONS",
+  "section.privacy": "PRIVACY",
+  "field.model": "model",
+  "field.lang": "language",
+  "field.name": "name",
+  "not_configured": "not configured",
+  "add_pattern": "+ add pattern…",
+  "delete_hint": "  d delete",
+  "prompt.editing_hint": "   [Enter = confirm  •  \\n = line break  •  Esc = cancel]",
+  "prompt.browse_hint": "   [Enter to edit  •  \\n = line break]"
+}

@@ -1,5 +1,7 @@
 # Activity Tracker
 
+> [English documentation available in docs/README.md](docs/README.md)
+
 Daemon em Rust que captura atividades do sistema (terminal, janelas abertas, abas do Chrome/Brave, repositórios Git) e gera resumos inteligentes via LLM. Suporta Ollama (local), OpenAI, Anthropic, Groq, Gemini e OpenRouter. Opcionalmente envia o resumo para o [Notion](https://notion.so) ou para um canal do [Slack](https://slack.com) via webhook.
 
 ## Instalação

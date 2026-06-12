@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use super::{ActiveTab, App, SummaryState};
+use super::i18n::Ui;
 
 // ─── Top-level render ─────────────────────────────────────────────────────────
 
@@ -28,14 +29,15 @@ pub(super) fn render(f: &mut Frame, app: &mut App) {
 }
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
+    let ui = Ui::new(&app.config.lang);
     let today = chrono::Local::now().date_naive();
     let date_label = if app.date == today {
-        format!("◄  {} (hoje)  ►", app.date.format("%Y-%m-%d"))
+        format!("◄  {} ({})  ►", app.date.format("%Y-%m-%d"), ui.t("today"))
     } else {
         format!("◄  {}  ►", app.date.format("%Y-%m-%d  %A"))
     };
 
-    let tab_names = vec!["  Atividades  ", "  Resumo  ", "  Projetos  ", "  Config  "];
+    let tab_names = ui.tab_names();
     let selected = match app.active_tab {
         ActiveTab::Activities => 0,
         ActiveTab::Summary => 1,
@@ -77,25 +79,38 @@ fn render_content(f: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
+    let ui = Ui::new(&app.config.lang);
     let at_today = app.date >= chrono::Local::now().date_naive();
-    let nav = if at_today { "← dia" } else { "←/→ dia" };
+    let nav = if at_today {
+        ui.t("hint.prev_day")
+    } else {
+        ui.t("hint.both_days")
+    };
     let r_hint = match &app.summary {
-        SummaryState::Cached(_) => "r regenerar",
-        _ => "r resumo",
+        SummaryState::Cached(_) => ui.t("hint.regenerate"),
+        _ => ui.t("hint.summary"),
     };
     let hints = match app.active_tab {
         ActiveTab::Projects => {
-            format!(" {nav}  Tab aba  ↑↓/jk scroll  s semana  m mês  q sair ")
+            format!(
+                " {nav}  {}  ↑↓/jk scroll  {}  {} ",
+                ui.t("hint.tab"),
+                ui.t("hint.week_month"),
+                ui.t("hint.quit"),
+            )
         }
         ActiveTab::Config => {
             if matches!(app.config_edit, super::ConfigEditMode::Editing(_, _)) {
-                " Enter salvar  Esc cancelar ".to_string()
+                ui.t("hint.config_editing").to_string()
             } else {
-                " ↑↓/jk navegar  Enter/e editar  ← → ciclar  d deletar padrão  R reload  q sair "
-                    .to_string()
+                ui.t("hint.config_browse").to_string()
             }
         }
-        _ => format!(" {nav}  Tab aba  ↑↓/jk scroll  {r_hint}  q sair "),
+        _ => format!(
+            " {nav}  {}  ↑↓/jk scroll  {r_hint}  {} ",
+            ui.t("hint.tab"),
+            ui.t("hint.quit"),
+        ),
     };
     let p = Paragraph::new(hints).style(Style::default().fg(Color::DarkGray));
     f.render_widget(p, area);
@@ -104,17 +119,16 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 // ─── Atividades ───────────────────────────────────────────────────────────────
 
 fn render_activities(f: &mut Frame, app: &App, area: Rect) {
+    let ui = Ui::new(&app.config.lang);
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Atividades Brutas ");
+        .title(ui.t("block.activities"));
 
     let Some(data) = &app.data else {
-        let p = Paragraph::new(
-            "\n\n  Nenhum log encontrado para esta data.\n\n  Use ← → para navegar entre os dias.",
-        )
-        .block(block)
-        .alignment(Alignment::Left)
-        .style(Style::default().fg(Color::DarkGray));
+        let p = Paragraph::new(ui.t("no_log"))
+            .block(block)
+            .alignment(Alignment::Left)
+            .style(Style::default().fg(Color::DarkGray));
         f.render_widget(p, area);
         return;
     };
@@ -123,7 +137,7 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
 
     if !data.commands.is_empty() {
         lines.push(Line::from(Span::styled(
-            format!("■ SHELL  ({} comandos)", data.commands.len()),
+            ui.tf("section.shell", &[("n", &data.commands.len().to_string())]),
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
@@ -143,7 +157,7 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
 
     if !data.top_apps.is_empty() {
         lines.push(Line::from(Span::styled(
-            format!("■ APPS  ({} janelas)", data.top_apps.len()),
+            ui.tf("section.apps", &[("n", &data.top_apps.len().to_string())]),
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
@@ -179,7 +193,7 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
             *n += 1;
         }
         lines.push(Line::from(Span::styled(
-            format!("■ SITES  ({} abas)", data.tabs.len()),
+            ui.tf("section.sites", &[("n", &data.tabs.len().to_string())]),
             Style::default()
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
@@ -207,10 +221,12 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
     if !data.repos.is_empty() {
         let total_commits: usize = data.repos.iter().map(|(_, c)| c.len()).sum();
         lines.push(Line::from(Span::styled(
-            format!(
-                "■ GIT  ({} repos, {} commits)",
-                data.repos.len(),
-                total_commits
+            ui.tf(
+                "section.git",
+                &[
+                    ("repos", &data.repos.len().to_string()),
+                    ("commits", &total_commits.to_string()),
+                ],
             ),
             Style::default()
                 .fg(Color::Magenta)
@@ -242,7 +258,7 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
 
     if !data.tags.is_empty() {
         lines.push(Line::from(Span::styled(
-            format!("■ NOTAS  ({} evento(s))", data.tags.len()),
+            ui.tf("section.notes", &[("n", &data.tags.len().to_string())]),
             Style::default()
                 .fg(Color::LightRed)
                 .add_modifier(Modifier::BOLD),
@@ -270,29 +286,29 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
 // ─── Projetos ─────────────────────────────────────────────────────────────────
 
 fn render_projects(f: &mut Frame, app: &App, area: Rect) {
-    let window_label = if app.projects_days == 7 {
-        "7 dias"
+    let ui = Ui::new(&app.config.lang);
+    let window_key = if app.projects_days == 7 {
+        "projects.window_7"
     } else {
-        "30 dias"
+        "projects.window_30"
     };
+    let title = ui.tf("projects.title", &[("label", ui.t(window_key))]);
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(" Projetos — {window_label} "));
+        .title(title);
 
     let stats = match &app.projects {
         None => {
-            let p = Paragraph::new("\n\n  Carregando...")
+            let p = Paragraph::new(ui.t("loading"))
                 .block(block)
                 .style(Style::default().fg(Color::DarkGray));
             f.render_widget(p, area);
             return;
         }
         Some(s) if s.is_empty() => {
-            let p = Paragraph::new(
-                "\n\n  Nenhum commit encontrado no período.\n\n  O daemon precisa estar rodando para coletar dados de git.",
-            )
-            .block(block)
-            .style(Style::default().fg(Color::DarkGray));
+            let p = Paragraph::new(ui.t("no_commits"))
+                .block(block)
+                .style(Style::default().fg(Color::DarkGray));
             f.render_widget(p, area);
             return;
         }
@@ -350,16 +366,19 @@ fn render_projects(f: &mut Frame, app: &App, area: Rect) {
 // ─── Resumo ───────────────────────────────────────────────────────────────────
 
 fn render_summary(f: &mut Frame, app: &App, area: Rect) {
+    let ui = Ui::new(&app.config.lang);
     match &app.summary {
         SummaryState::Empty => {
-            let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title(ui.t("block.summary"));
             let hint = if app.data.is_some() {
-                format!(
-                    "\n\n  Pressione r para gerar o resumo.\n\n  Provider: {}/{}",
-                    app.provider, app.model
+                ui.tf(
+                    "summary.prompt_hint",
+                    &[("provider", &app.provider), ("model", &app.model)],
                 )
             } else {
-                "\n\n  Nenhum dado para esta data.".to_string()
+                ui.t("summary.no_data").to_string()
             };
             let p = Paragraph::new(hint)
                 .block(block)
@@ -367,12 +386,18 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(p, area);
         }
         SummaryState::Loading => {
-            let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title(ui.t("block.summary"));
             let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-            let frame = (app.tick as usize / 2) % frames.len();
-            let p = Paragraph::new(format!(
-                "\n\n  {} Gerando resumo com {}/{}...",
-                frames[frame], app.provider, app.model
+            let frame = frames[(app.tick as usize / 2) % frames.len()];
+            let p = Paragraph::new(ui.tf(
+                "summary.generating",
+                &[
+                    ("frame", frame),
+                    ("provider", &app.provider),
+                    ("model", &app.model),
+                ],
             ))
             .block(block)
             .style(Style::default().fg(Color::Cyan));
@@ -381,9 +406,9 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
         SummaryState::Cached(text) => {
             let block = Block::default()
                 .borders(Borders::ALL)
-                .title(" Resumo LLM ")
+                .title(ui.t("block.summary"))
                 .title_bottom(Span::styled(
-                    " salvo · r para regenerar ",
+                    ui.t("summary.saved_hint"),
                     Style::default().fg(Color::DarkGray),
                 ));
             let p = Paragraph::new(markdown_to_lines(text))
@@ -393,7 +418,9 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(p, area);
         }
         SummaryState::Done(text) => {
-            let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title(ui.t("block.summary"));
             let p = Paragraph::new(markdown_to_lines(text))
                 .block(block)
                 .scroll((app.scroll, 0))
@@ -401,8 +428,10 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(p, area);
         }
         SummaryState::Error(e) => {
-            let block = Block::default().borders(Borders::ALL).title(" Resumo LLM ");
-            let p = Paragraph::new(format!("\n  Erro: {e}"))
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title(ui.t("block.summary"));
+            let p = Paragraph::new(ui.tf("summary.error", &[("e", e)]))
                 .block(block)
                 .style(Style::default().fg(Color::Red));
             f.render_widget(p, area);
@@ -501,7 +530,8 @@ pub(super) fn handle_mouse(app: &mut App, mouse: crossterm::event::MouseEvent) {
                     app.next_day();
                 }
             } else if y <= 2 {
-                let tab_names = ["  Atividades  ", "  Resumo  ", "  Projetos  ", "  Config  "];
+                let ui = Ui::new(&app.config.lang);
+                let tab_names = ui.tab_names();
                 let mut pos = 1u16;
                 let mut clicked = None;
                 let mut last_started = None;

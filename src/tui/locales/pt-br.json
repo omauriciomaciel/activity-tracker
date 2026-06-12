@@ -1,0 +1,52 @@
+{
+  "tab.activities": "  Atividades  ",
+  "tab.summary": "  Resumo  ",
+  "tab.projects": "  Projetos  ",
+  "tab.config": "  Config  ",
+
+  "today": "hoje",
+
+  "hint.prev_day": "← dia",
+  "hint.both_days": "←/→ dia",
+  "hint.tab": "Tab aba",
+  "hint.summary": "r resumo",
+  "hint.regenerate": "r regenerar",
+  "hint.quit": "q sair",
+  "hint.week_month": "s semana  m mês",
+  "hint.config_editing": " Enter salvar  Esc cancelar ",
+  "hint.config_browse": " ↑↓/jk navegar  Enter/e editar  ← → ciclar  d deletar padrão  R reload  q sair ",
+
+  "block.activities": " Atividades Brutas ",
+  "section.shell": "■ SHELL  ({n} comandos)",
+  "section.apps": "■ APPS  ({n} janelas)",
+  "section.sites": "■ SITES  ({n} abas)",
+  "section.git": "■ GIT  ({repos} repos, {commits} commits)",
+  "section.notes": "■ NOTAS  ({n} evento(s))",
+  "no_log": "\n\n  Nenhum log encontrado para esta data.\n\n  Use ← → para navegar entre os dias.",
+
+  "projects.window_7": "7 dias",
+  "projects.window_30": "30 dias",
+  "projects.title": " Projetos — {label} ",
+  "loading": "\n\n  Carregando...",
+  "no_commits": "\n\n  Nenhum commit encontrado no período.\n\n  O daemon precisa estar rodando para coletar dados de git.",
+
+  "block.summary": " Resumo LLM ",
+  "summary.prompt_hint": "\n\n  Pressione r para gerar o resumo.\n\n  Provider: {provider}/{model}",
+  "summary.no_data": "\n\n  Nenhum dado para esta data.",
+  "summary.generating": "\n\n  {frame} Gerando resumo com {provider}/{model}...",
+  "summary.saved_hint": " salvo · r para regenerar ",
+  "summary.error": "\n  Erro: {e}",
+
+  "block.config": " Configuração ",
+  "section.machine": "MÁQUINA",
+  "section.integrations": "INTEGRAÇÕES",
+  "section.privacy": "PRIVACIDADE",
+  "field.model": "modelo",
+  "field.lang": "idioma",
+  "field.name": "nome",
+  "not_configured": "não configurado",
+  "add_pattern": "+ adicionar padrão…",
+  "delete_hint": "  d deletar",
+  "prompt.editing_hint": "   [Enter = confirma  •  \\n = quebra de linha  •  Esc = cancela]",
+  "prompt.browse_hint": "   [Enter para editar  •  \\n = quebra de linha]"
+}
