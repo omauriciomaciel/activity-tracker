@@ -17,7 +17,7 @@ jobs:
       tag: ${{ steps.sem.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -62,29 +62,29 @@ jobs:
             rust_arch: aarch64
             cross: true
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
           - target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-latest
 
     env:
       RELEASE_TAG: ${{ needs.release.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.release.outputs.tag }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
         with:
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: ${{ matrix.target }}
 
       - name: Install cross
         if: matrix.cross == true
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2
         with:
           tool: cross
 
@@ -174,6 +174,7 @@ jobs:
 
           mkdir -p dmg-staging
           cp "target/${{ matrix.target }}/release/activity-tracker" dmg-staging/
+          cp install.sh dmg-staging/
 
           DMG="activity-tracker-${VERSION}-macos-${ARCH}.dmg"
 
@@ -203,7 +204,7 @@ jobs:
       # ── Upload ─────────────────────────────────────────────────────────────
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ needs.release.outputs.tag }}
           files: |
@@ -219,7 +220,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all release assets
-        uses: robinraju/release-downloader@v1
+        uses: robinraju/release-downloader@28fc21f50d76778e7023361aa1f863e717d3d56f # v1
         with:
           tag: ${{ needs.release.outputs.tag }}
           fileName: "*"
@@ -233,7 +234,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Upload checksums
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ needs.release.outputs.tag }}
           files: dist/SHA256SUMS.txt
