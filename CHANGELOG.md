@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.11.0 (2026-06-12)
+
+### Chores
+
+- **ci**: Atualiza versão do python-semantic-release
+  ([`a547740`](https://github.com/omauriciomaciel/activity-tracker/commit/a54774088fdca135a9d9736f6bf71d3b6bb014d0))
+
+### Features
+
+- **tui**: Adiciona suporte a múltiplos idiomas
+  ([`aab9ef5`](https://github.com/omauriciomaciel/activity-tracker/commit/aab9ef54bb2522e6d20d27290aa0f72a2aecafba))
+
+- **tui**: Implementa sistema de internacionalização (i18n)
+  ([`7915790`](https://github.com/omauriciomaciel/activity-tracker/commit/7915790c82e80827919837887e851a8809f11902))
+
+
 ## v1.10.0 (2026-06-12)
 
 ### Chores
