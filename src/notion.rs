@@ -49,9 +49,39 @@ pub async fn send_page(
 fn markdown_to_blocks(text: &str) -> Vec<Value> {
     let mut blocks: Vec<Value> = Vec::new();
     let mut para_lines: Vec<&str> = Vec::new();
+    let mut code_fence: Option<String> = None; // language hint when inside ```
+    let mut code_lines: Vec<&str> = Vec::new();
 
     for line in text.lines() {
         let trimmed = line.trim();
+
+        // Inside a fenced code block — collect until closing ```
+        if code_fence.is_some() {
+            if trimmed == "```" || trimmed == "~~~" {
+                let code_content = code_lines.join("\n");
+                let lang = code_fence.take().unwrap_or_default();
+                code_lines.clear();
+                blocks.push(json!({
+                    "object": "block",
+                    "type": "code",
+                    "code": {
+                        "rich_text": [plain_span(&code_content)],
+                        "language": if lang.is_empty() { "plain text" } else { &lang }
+                    }
+                }));
+            } else {
+                code_lines.push(line);
+            }
+            continue;
+        }
+
+        // Opening fence: ``` or ```lang or ~~~
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            flush_into(&mut blocks, &mut para_lines);
+            let lang = trimmed.trim_start_matches('`').trim_start_matches('~').trim().to_string();
+            code_fence = Some(lang);
+            continue;
+        }
 
         if trimmed.is_empty() {
             if let Some(b) = flush_paragraph(&para_lines) {
@@ -61,12 +91,38 @@ fn markdown_to_blocks(text: &str) -> Vec<Value> {
             continue;
         }
 
-        // Heading: line is entirely **text** (Ollama uses this for section titles)
-        if let Some(inner) = try_heading(trimmed) {
-            if let Some(b) = flush_paragraph(&para_lines) {
-                blocks.push(b);
-            }
-            para_lines.clear();
+        // ATX headings: # / ## / ###
+        if let Some(inner) = trimmed.strip_prefix("### ") {
+            flush_into(&mut blocks, &mut para_lines);
+            blocks.push(json!({
+                "object": "block",
+                "type": "heading_3",
+                "heading_3": { "rich_text": parse_inline(inner.trim()) }
+            }));
+            continue;
+        }
+        if let Some(inner) = trimmed.strip_prefix("## ") {
+            flush_into(&mut blocks, &mut para_lines);
+            blocks.push(json!({
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": { "rich_text": parse_inline(inner.trim()) }
+            }));
+            continue;
+        }
+        if let Some(inner) = trimmed.strip_prefix("# ") {
+            flush_into(&mut blocks, &mut para_lines);
+            blocks.push(json!({
+                "object": "block",
+                "type": "heading_1",
+                "heading_1": { "rich_text": parse_inline(inner.trim()) }
+            }));
+            continue;
+        }
+
+        // Setext-style heading: line entirely **text** (Ollama / some models)
+        if let Some(inner) = try_bold_heading(trimmed) {
+            flush_into(&mut blocks, &mut para_lines);
             blocks.push(json!({
                 "object": "block",
                 "type": "heading_2",
@@ -75,12 +131,23 @@ fn markdown_to_blocks(text: &str) -> Vec<Value> {
             continue;
         }
 
+        // Indented sub-bullet (2+ spaces before - or *)
+        if let Some(rest) = try_indented_bullet(line) {
+            flush_into(&mut blocks, &mut para_lines);
+            blocks.push(json!({
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
+                    "rich_text": parse_inline(rest),
+                    "color": "default"
+                }
+            }));
+            continue;
+        }
+
         // Bullet item: * text / - text / *   text (Ollama uses "* " and "*   ")
         if let Some(rest) = try_bullet(trimmed) {
-            if let Some(b) = flush_paragraph(&para_lines) {
-                blocks.push(b);
-            }
-            para_lines.clear();
+            flush_into(&mut blocks, &mut para_lines);
             blocks.push(json!({
                 "object": "block",
                 "type": "bulleted_list_item",
@@ -99,12 +166,38 @@ fn markdown_to_blocks(text: &str) -> Vec<Value> {
     blocks
 }
 
-fn try_heading(line: &str) -> Option<&str> {
+fn flush_into(blocks: &mut Vec<Value>, para_lines: &mut Vec<&str>) {
+    if let Some(b) = flush_paragraph(para_lines) {
+        blocks.push(b);
+    }
+    para_lines.clear();
+}
+
+// Entire line is **text** → treat as heading (some models omit ## prefix)
+fn try_bold_heading(line: &str) -> Option<&str> {
     let inner = line.strip_prefix("**")?.strip_suffix("**")?;
     if inner.contains("**") {
         return None;
     }
     Some(inner)
+}
+
+fn try_indented_bullet(line: &str) -> Option<&str> {
+    // Requires at least 2 leading spaces before - or *
+    if line.len() < 3 {
+        return None;
+    }
+    let stripped = line.trim_start();
+    let indent = line.len() - stripped.len();
+    if indent < 2 {
+        return None;
+    }
+    for prefix in &["- ", "* "] {
+        if let Some(rest) = stripped.strip_prefix(prefix) {
+            return Some(rest.trim_start());
+        }
+    }
+    None
 }
 
 fn try_bullet(line: &str) -> Option<&str> {
@@ -139,38 +232,77 @@ fn parse_inline(text: &str) -> Vec<Value> {
     let mut remaining = text;
 
     while !remaining.is_empty() {
-        if let Some(open) = remaining.find("**") {
-            let before = &remaining[..open];
-            if !before.is_empty() {
-                spans.extend(span_chunks(before, false, false));
-            }
-            let after_open = &remaining[open + 2..];
-            if let Some(close) = after_open.find("**") {
-                spans.extend(span_chunks(&after_open[..close], true, false));
-                remaining = &after_open[close + 2..];
-                continue;
-            }
-            spans.extend(span_chunks(remaining, false, false));
-            break;
-        }
+        // Find the earliest marker among ` ** *
+        let pos_backtick = remaining.find('`');
+        let pos_double = remaining.find("**");
+        let pos_single = find_single_asterisk(remaining);
 
-        if let Some(open) = find_single_asterisk(remaining) {
-            let before = &remaining[..open];
-            if !before.is_empty() {
-                spans.extend(span_chunks(before, false, false));
-            }
-            let after_open = &remaining[open + 1..];
-            if let Some(close) = find_single_asterisk(after_open) {
-                spans.extend(span_chunks(&after_open[..close], false, true));
-                remaining = &after_open[close + 1..];
-                continue;
-            }
-            spans.extend(span_chunks(remaining, false, false));
-            break;
-        }
+        // Pick the earliest match
+        let earliest = [
+            pos_backtick.map(|p| (p, 0u8)),
+            pos_double.map(|p| (p, 1u8)),
+            pos_single.map(|p| (p, 2u8)),
+        ]
+        .into_iter()
+        .flatten()
+        .min_by_key(|(p, _)| *p);
 
-        spans.extend(span_chunks(remaining, false, false));
-        break;
+        match earliest {
+            None => {
+                spans.extend(span_chunks(remaining, false, false));
+                break;
+            }
+            Some((pos, 0)) => {
+                // Inline code: `...`
+                if pos > 0 {
+                    spans.extend(span_chunks(&remaining[..pos], false, false));
+                }
+                let after = &remaining[pos + 1..];
+                if let Some(close) = after.find('`') {
+                    let code = &after[..close];
+                    spans.push(json!({
+                        "type": "text",
+                        "text": { "content": code },
+                        "annotations": {
+                            "bold": false, "italic": false, "strikethrough": false,
+                            "underline": false, "code": true, "color": "default"
+                        }
+                    }));
+                    remaining = &after[close + 1..];
+                } else {
+                    spans.extend(span_chunks(remaining, false, false));
+                    break;
+                }
+            }
+            Some((pos, 1)) => {
+                // Bold: **...**
+                if pos > 0 {
+                    spans.extend(span_chunks(&remaining[..pos], false, false));
+                }
+                let after = &remaining[pos + 2..];
+                if let Some(close) = after.find("**") {
+                    spans.extend(span_chunks(&after[..close], true, false));
+                    remaining = &after[close + 2..];
+                } else {
+                    spans.extend(span_chunks(remaining, false, false));
+                    break;
+                }
+            }
+            Some((pos, _)) => {
+                // Italic: *...*
+                if pos > 0 {
+                    spans.extend(span_chunks(&remaining[..pos], false, false));
+                }
+                let after = &remaining[pos + 1..];
+                if let Some(close) = find_single_asterisk(after) {
+                    spans.extend(span_chunks(&after[..close], false, true));
+                    remaining = &after[close + 1..];
+                } else {
+                    spans.extend(span_chunks(remaining, false, false));
+                    break;
+                }
+            }
+        }
     }
 
     spans
