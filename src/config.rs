@@ -18,6 +18,8 @@ pub struct Config {
     pub notion_page_id: Option<String>,
     #[serde(default)]
     pub machine_name: Option<String>,
+    #[serde(default)]
+    pub slack_webhook: Option<String>,
 }
 
 fn default_provider() -> String {
@@ -35,6 +37,7 @@ impl Default for Config {
             notion_token: None,
             notion_page_id: None,
             machine_name: None,
+            slack_webhook: None,
         }
     }
 }
@@ -96,7 +99,7 @@ impl Config {
             )
         };
         format!(
-            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n  máquina:    {}\n  notion:     {}\n  logs:       {}\n  config:     {}",
+            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n  máquina:    {}\n  notion:     {}\n  slack:      {}\n  logs:       {}\n  config:     {}",
             config_path().display(),
             self.provider,
             self.model,
@@ -104,6 +107,11 @@ impl Config {
             self.lang,
             self.get_machine_name(),
             if self.notion_token.is_some() && self.notion_page_id.is_some() {
+                "configurado"
+            } else {
+                "não configurado"
+            },
+            if self.slack_webhook.is_some() {
                 "configurado"
             } else {
                 "não configurado"

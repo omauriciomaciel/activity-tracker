@@ -177,6 +177,7 @@ pub struct RunOptions<'a> {
     pub lang: &'a str,
     pub machine_name: &'a str,
     pub notion: Option<(&'a str, &'a str)>,
+    pub slack: Option<&'a str>,
     pub search: Option<&'a str>,
 }
 
@@ -191,6 +192,7 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
         lang,
         machine_name,
         notion,
+        slack,
         search,
     } = opts;
     let log_dir = config::log_dir();
@@ -313,16 +315,25 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
     skin.print_text(&summary);
     println!("\n{}", border.cyan());
 
+    let date_label = match data.dates.as_slice() {
+        [] => chrono::Local::now().format("%Y-%m-%d").to_string(),
+        [single] => single.clone(),
+        dates => format!("{} a {}", dates.last().unwrap(), dates.first().unwrap()),
+    };
+    let title = format!("{date_label} — {machine_name}");
+
     if let Some((token, page_id)) = notion {
-        let date_label = match data.dates.as_slice() {
-            [] => chrono::Local::now().format("%Y-%m-%d").to_string(),
-            [single] => single.clone(),
-            dates => format!("{} a {}", dates.last().unwrap(), dates.first().unwrap()),
-        };
-        let title = format!("{date_label} — {machine_name}");
         print!("{}", "Enviando ao Notion...".dimmed());
         match crate::notion::send_page(token, page_id, &title, &summary).await {
             Ok(url) => println!(" {}", url.cyan()),
+            Err(e) => eprintln!(" erro: {e}"),
+        }
+    }
+
+    if let Some(webhook_url) = slack {
+        print!("{}", "Enviando ao Slack...".dimmed());
+        match crate::slack::send_message(webhook_url, &title, &summary).await {
+            Ok(()) => println!(" {}", "ok".green()),
             Err(e) => eprintln!(" erro: {e}"),
         }
     }

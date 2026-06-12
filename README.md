@@ -1,6 +1,6 @@
 # Activity Tracker
 
-Daemon em Rust que captura atividades do sistema (terminal, janelas abertas, abas do Chrome/Brave, repositórios Git) e gera resumos inteligentes via LLM. Suporta Ollama (local), OpenAI, Anthropic, Groq, Gemini e OpenRouter. Opcionalmente envia o resumo como nota para o [Notion](https://notion.so).
+Daemon em Rust que captura atividades do sistema (terminal, janelas abertas, abas do Chrome/Brave, repositórios Git) e gera resumos inteligentes via LLM. Suporta Ollama (local), OpenAI, Anthropic, Groq, Gemini e OpenRouter. Opcionalmente envia o resumo para o [Notion](https://notion.so) ou para um canal do [Slack](https://slack.com) via webhook.
 
 ## Instalação
 
@@ -92,6 +92,12 @@ ats --provider groq --model llama-3.1-8b-instant
 # Enviar resumo ao Notion
 ats --today --send-notion
 
+# Enviar resumo ao Slack
+ats --today --send-slack
+
+# Enviar para ambos ao mesmo tempo
+ats --week --send-notion --send-slack
+
 # TUI interativa
 at tui                       # abre a interface, hoje como data inicial
 at tui --provider openai --model gpt-4o-mini
@@ -111,6 +117,7 @@ at config set-url http://localhost:11434  # URL do Ollama (provider=ollama)
 at config set-lang pt-br            # pt-br | en | es
 at config set-notion-token secret_xxx
 at config set-notion-page <page_id>
+at config set-slack-webhook https://hooks.slack.com/services/...
 at config set-machine-name "MacBook Pro"  # opcional, usa hostname se omitido
 at config show
 ```
@@ -201,8 +208,8 @@ O `install.sh` abre as telas automaticamente. Caso precise configurar manualment
 Crie uma [Internal Integration](https://www.notion.so/my-integrations) no Notion, compartilhe uma página com ela e configure:
 
 ```bash
-activity-tracker config set-notion-token secret_xxx
-activity-tracker config set-notion-page <page_id>   # ID após o último / na URL da página
+at config set-notion-token secret_xxx
+at config set-notion-page <page_id>   # ID após o último / na URL da página
 ```
 
 A partir daí, qualquer resumo pode ser enviado com `--send-notion`:
@@ -211,7 +218,28 @@ A partir daí, qualquer resumo pode ser enviado com `--send-notion`:
 ats --today --send-notion
 ```
 
-O resumo é criado como subpágina da página configurada. O título da nota usa a data real e o nome da máquina, ex: `2026-06-09 — MacBook Pro`. Se `machine_name` não estiver configurado, usa o hostname do sistema.
+O resumo é criado como subpágina da página configurada. O título usa a data e o nome da máquina, ex: `2026-06-12 — MacBook Pro`.
+
+## Integração com Slack
+
+Crie um [Incoming Webhook](https://api.slack.com/messaging/webhooks) no Slack (em **api.slack.com/apps → seu app → Incoming Webhooks**) e configure:
+
+```bash
+at config set-slack-webhook https://hooks.slack.com/services/T.../B.../...
+```
+
+A partir daí, qualquer resumo pode ser enviado com `--send-slack`:
+
+```bash
+ats --today --send-slack
+ats --week --send-slack
+```
+
+O resumo é enviado como mensagem formatada com Block Kit (header + seções). Funciona com qualquer canal ao qual o webhook tenha acesso. Pode ser usado junto com `--send-notion`:
+
+```bash
+ats --today --send-notion --send-slack
+```
 
 ## O que é capturado
 
@@ -241,10 +269,11 @@ provider   = "ollama"
 model      = "llama3.1"
 ollama_url = "http://localhost:11434"
 lang       = "pt-br"
-# api_key         = "sk-..."         # opcional, para providers cloud
-# notion_token    = "secret_xxx"     # opcional
-# notion_page_id  = "abc123..."      # opcional
-# machine_name    = "MacBook Pro"    # opcional, padrão: hostname do sistema
+# api_key         = "sk-..."                              # opcional, para providers cloud
+# notion_token    = "secret_xxx"                          # opcional
+# notion_page_id  = "abc123..."                           # opcional
+# slack_webhook   = "https://hooks.slack.com/services/..."  # opcional
+# machine_name    = "MacBook Pro"                         # opcional, padrão: hostname do sistema
 ```
 
 ## Resumo gerado

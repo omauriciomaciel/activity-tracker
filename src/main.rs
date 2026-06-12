@@ -3,6 +3,7 @@ mod config;
 mod daemon;
 mod notion;
 mod projects;
+mod slack;
 mod summarizer;
 mod tui;
 mod updater;
@@ -90,6 +91,10 @@ enum Commands {
         /// Enviar resumo ao Notion após gerar
         #[arg(long)]
         send_notion: bool,
+
+        /// Enviar resumo ao Slack via webhook configurado
+        #[arg(long)]
+        send_slack: bool,
     },
 
     /// Exporta logs de atividade em CSV ou JSON
@@ -189,6 +194,11 @@ enum ConfigAction {
         /// ID da página (URL da página → copiar ID após o último /)
         page_id: String,
     },
+    /// Define o webhook URL do Slack para envio de resumos
+    SetSlackWebhook {
+        /// Webhook URL (em api.slack.com/apps → Incoming Webhooks)
+        url: String,
+    },
     /// Mostra a configuração atual
     Show,
 }
@@ -274,6 +284,7 @@ async fn main() -> Result<()> {
             month,
             search,
             send_notion,
+            send_slack,
         } => {
             if today {
                 days = 1;
@@ -304,6 +315,21 @@ async fn main() -> Result<()> {
                 None
             };
 
+            let slack = if send_slack {
+                match &cfg.slack_webhook {
+                    Some(url) => Some(url.clone()),
+                    None => {
+                        eprintln!("Erro: Slack não configurado. Execute:");
+                        eprintln!(
+                            "  activity-tracker config set-slack-webhook https://hooks.slack.com/..."
+                        );
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                None
+            };
+
             let machine = cfg.get_machine_name();
             summarizer::run(summarizer::RunOptions {
                 days,
@@ -315,6 +341,7 @@ async fn main() -> Result<()> {
                 lang: &lang,
                 machine_name: &machine,
                 notion: notion.as_ref().map(|(t, p)| (t.as_str(), p.as_str())),
+                slack: slack.as_deref(),
                 search: search.as_deref(),
             })
             .await?;
@@ -373,6 +400,11 @@ async fn main() -> Result<()> {
                 cfg.notion_page_id = Some(page_id.clone());
                 cfg.save()?;
                 println!("Notion page ID salvo: {page_id}");
+            }
+            ConfigAction::SetSlackWebhook { url } => {
+                cfg.slack_webhook = Some(url.clone());
+                cfg.save()?;
+                println!("Slack webhook salvo");
             }
             ConfigAction::Show => {
                 println!("{}", cfg.display());
