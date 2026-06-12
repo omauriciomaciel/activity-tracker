@@ -1,193 +1,475 @@
 # CHANGELOG
 
-<!-- version list -->
+## v1.9.0 (2026-06-12)
+
+### Chore
+
+* chore(ci): atualiza versão e ajusta release automation
+
+- Fixa versão do python-semantic-release para evitar regressões
+- Atualiza versão do pacote no Cargo.toml para 1.8.0
+- Remove arquivo de configuração redundante do semantic-release ([`93dc4d4`](https://github.com/omauriciomaciel/activity-tracker/commit/93dc4d43af18046bdf202feb383bafd1508d5c3b))
+
+### Feature
+
+* feat(tui): implementa edição interativa de configurações
+
+- Adiciona modo de navegação e edição para campos de configuração
+- Permite ciclar entre provedores de LLM e idiomas com as setas
+- Implementa adição e remoção dinâmica de padrões de privacidade
+- Atualiza a interface visual com indicadores de seleção e edição ([`303e953`](https://github.com/omauriciomaciel/activity-tracker/commit/303e9539f66f34cc3c48fa528be9f1239b4cf361))
+
+* feat(tui): adiciona aba de visualização de configurações
+
+- Implementa nova aba Config para exibir parâmetros do sistema
+- Adiciona suporte ao carregamento e recarregamento dinâmico de config
+- Mapeia a tecla &#39;4&#39; e &#39;R&#39; para navegação e atualização de ajustes
+- Exibe detalhes de LLM, integrações, privacidade e caminhos de arquivos ([`35c7939`](https://github.com/omauriciomaciel/activity-tracker/commit/35c79390fc460c134ed9d850e056b9035ae7210c))
+
+* feat(collector): implementa filtragem de padrões de privacidade
+
+- Adiciona lista de padrões bloqueados na configuração para evitar logs sensíveis
+- Implementa função de filtragem case-insensitive para comandos, janelas e abas
+- Adiciona comandos CLI para gerenciar (adicionar, remover e listar) bloqueios
+- Atualiza o daemon e o coletor para aplicar os filtros durante a captura ([`7734195`](https://github.com/omauriciomaciel/activity-tracker/commit/7734195f8721acda67efc6550aff6d8409ec789b))
+
+* feat(summarizer): implementa persistência de resumos em disco
+
+- Adiciona funções para salvar e carregar resumos no sistema de arquivos
+- Permite que a TUI carregue resumos cacheados ao iniciar ou mudar de dia
+- Atualiza a interface para indicar quando um resumo foi recuperado do cache
+- Persiste resumos automaticamente após a geração via LLM ([`d82cd5d`](https://github.com/omauriciomaciel/activity-tracker/commit/d82cd5d866d032fbfb8191e0cfa5ce304be8c117))
+
+* feat(slack): adiciona integração para envio de resumos via webhook
+
+- Implementa novo módulo para envio de mensagens formatadas ao Slack
+- Adiciona comando `config set-slack-webhook` para gerenciar a URL
+- Introduz a flag `--send-slack` para disparar resumos automaticamente
+- Atualiza documentação do README com guia de configuração do Slack
+- Adiciona suporte a semantic-release via pyproject.toml ([`318f101`](https://github.com/omauriciomaciel/activity-tracker/commit/318f1014ed0cef526d4fd91254c92b197fa65266))
 
 ## v1.8.0 (2026-06-12)
 
 ### Documentation
 
-- **changelog**: Atualiza histórico de versões e detalhes
-  ([`08e4515`](https://github.com/omauriciomaciel/activity-tracker/commit/08e4515143624965390c96b1f51a16839eb75093))
+* docs(changelog): atualiza histórico de versões e detalhes
 
-### Features
+- Detalha funcionalidades das versões v1.0.0 até v1.7.0
+- Melhora descrições de features e correções de bugs
+- Adiciona links de referência para os commits
+- Corrige formatação de aliases e termos técnicos ([`08e4515`](https://github.com/omauriciomaciel/activity-tracker/commit/08e4515143624965390c96b1f51a16839eb75093))
 
-- **install**: Implementa instalação via binários pré-compilados
-  ([`e0d9813`](https://github.com/omauriciomaciel/activity-tracker/commit/e0d98131a9b6540941d87a51b3d9ea5c58078300))
+### Feature
 
-- **projects**: Adiciona análise e visualização de estatísticas de projetos
-  ([`9f64e24`](https://github.com/omauriciomaciel/activity-tracker/commit/9f64e244f253b8f8fe155c3b07da4a9b09945c49))
+* feat(install): implementa instalação via binários pré-compilados
 
+- Substitui compilação local por download de releases do GitHub
+- Adiciona detecção automática de OS e arquitetura no install.sh
+- Permite definição de diretório de instalação via variável de ambiente
+- Atualiza README com instruções de instalação rápida e nova aba Projetos
+- Melhora tratamento de permissões e interatividade no macOS ([`e0d9813`](https://github.com/omauriciomaciel/activity-tracker/commit/e0d98131a9b6540941d87a51b3d9ea5c58078300))
+
+* feat(projects): adiciona análise e visualização de estatísticas de projetos
+
+- Implementa módulo para processar logs de commits e calcular atividade por repo
+- Adiciona nova aba de Projetos na TUI com gráficos de barras e filtros temporais
+- Integra estatísticas de distribuição de projetos ao contexto do sumarizador LLM
+- Permite alternar entre visualizações de 7 e 30 dias na interface ([`9f64e24`](https://github.com/omauriciomaciel/activity-tracker/commit/9f64e244f253b8f8fe155c3b07da4a9b09945c49))
+
+### Unknown
+
+* 1.8.0
+
+Automatically generated by python-semantic-release ([`7439301`](https://github.com/omauriciomaciel/activity-tracker/commit/74393016603abdbfb33dbc41690775c59eea0964))
 
 ## v1.7.0 (2026-06-12)
 
-### Features
+### Chore
 
-- **tui**: Adiciona interface de usuário interativa com ratatui — navegar dias, ver atividades brutas e gerar resumo via LLM
-  ([`598b530`](https://github.com/omauriciomaciel/activity-tracker/commit/598b530))
+* chore(ci): melhora nomenclatura e configuração do build
+
+- Adiciona nomes descritivos para cada target na matriz de build
+- Substitui target por name no título do job para melhor legibilidade
+- Define explicitamente a toolchain stable no rust-toolchain
+- Melhora a identificação de builds em diferentes arquiteturas e OS ([`d0c0dd0`](https://github.com/omauriciomaciel/activity-tracker/commit/d0c0dd0026b6dda0c98132c88a88ad25e95d3e03))
 
 ### Documentation
 
-- **readme**: Adiciona documentação da TUI interativa com atalhos de teclado e mockup do layout
-  ([`3afee88`](https://github.com/omauriciomaciel/activity-tracker/commit/3afee88))
+* docs(readme): adiciona documentação da TUI interativa
 
-### Chores
+- Detalha o comando `at tui` e seus parâmetros de provider
+- Inclui representação visual da interface de terminal
+- Lista os atalhos de teclado e navegação da TUI
+- Facilita a descoberta da nova interface para o usuário ([`3afee88`](https://github.com/omauriciomaciel/activity-tracker/commit/3afee88eec0b7904485509f0b721fb8cc5f224ff))
 
-- **ci**: Melhora nomenclatura da matriz de build (ubuntu/macos em vez de target triple)
-  ([`d0c0dd0`](https://github.com/omauriciomaciel/activity-tracker/commit/d0c0dd0))
+### Feature
 
+* feat(tui): adiciona interface de usuário interativa
+
+- Implementa navegação por dias e visualização de atividades brutas
+- Integra geração de resumos via LLM diretamente na interface
+- Adiciona suporte a abas para alternar entre dados e resumos
+- Remove a flag verbose em favor da visualização na TUI ([`598b530`](https://github.com/omauriciomaciel/activity-tracker/commit/598b5302e40c7c9e9520b62f362690178eb37662))
+
+### Unknown
+
+* 1.7.0
+
+Automatically generated by python-semantic-release ([`eea1a84`](https://github.com/omauriciomaciel/activity-tracker/commit/eea1a840087624a5c63bbe0dcbdf0909843ed4ed))
+
+* Merge branch &#39;main&#39; of github.com:omauriciomaciel/activity-tracker ([`6db0c48`](https://github.com/omauriciomaciel/activity-tracker/commit/6db0c4865ea0d9a7c37d2151d65f3ffd46751c4d))
 
 ## v1.6.0 (2026-06-12)
 
-### Features
+### Chore
 
-- **cli**: Adiciona filtros de busca (`--search`) e exportação de logs em CSV/JSON (`export`)
-  ([`0ae233d`](https://github.com/omauriciomaciel/activity-tracker/commit/0ae233d))
+* chore(ci): refatora pipeline de build para workflow reutilizável
 
-- **summarizer**: Adiciona funcionalidade de busca com filtragem por termo nos resultados
-  ([`a8d1479`](https://github.com/omauriciomaciel/activity-tracker/commit/a8d1479))
+- Transforma o build em um workflow call para evitar duplicação
+- Remove suporte a builds de Windows para simplificar a matriz
+- Atualiza versões de runners macOS e fixa hashes de ações
+- Adiciona script de instalação aos pacotes DMG do macOS ([`14a39a5`](https://github.com/omauriciomaciel/activity-tracker/commit/14a39a52cb39832742d5783971ab138e1682c98b))
 
-### Chores
+* chore(ci): atualiza workflow de release
 
-- **ci**: Refatora pipeline de build para workflow reutilizável (`workflow_call`)
-  ([`14a39a5`](https://github.com/omauriciomaciel/activity-tracker/commit/14a39a5))
+- Fixa versões de actions por commit SHA para maior segurança
+- Atualiza runners de macOS para versões mais recentes
+- Inclui install.sh no pacote DMG do macOS
+- Garante reprodutibilidade do build ao evitar tags mutáveis ([`1efbb5a`](https://github.com/omauriciomaciel/activity-tracker/commit/1efbb5a15eb7a1c3ba415ba47724d454f058441a))
 
-- **ci**: Atualiza workflow de release
-  ([`1efbb5a`](https://github.com/omauriciomaciel/activity-tracker/commit/1efbb5a))
+### Feature
 
+* feat(cli): adiciona filtros de busca e exportação de logs
+
+- Implementa comando `at export` para CSV e JSON
+- Adiciona atalhos `--week` e `--month` para resumos temporais
+- Adiciona flag `--search` para filtrar logs por termo específico
+- Implementa lógica de condensação de dados para períodos longos ([`0ae233d`](https://github.com/omauriciomaciel/activity-tracker/commit/0ae233d0104952fac4dad84b19fb671bdec8f012))
+
+* feat(summarizer): adiciona funcionalidade de busca nos resultados
+
+- Permite filtrar dados agregados através de uma query de busca
+- Implementa lógica de filtragem e exibição de resultados vazios
+- Adiciona campo de busca às opções de execução do sumário
+- Garante que a análise ignore dados irrelevantes ao termo pesquisado ([`a8d1479`](https://github.com/omauriciomaciel/activity-tracker/commit/a8d1479b0a226dbba47d0ccf8059020e9edf43c4))
+
+### Unknown
+
+* 1.6.0
+
+Automatically generated by python-semantic-release ([`fee5cc9`](https://github.com/omauriciomaciel/activity-tracker/commit/fee5cc91957e21fd9ed3e63d259aede5503d0f31))
+
+* Merge branch &#39;main&#39; of github.com:omauriciomaciel/activity-tracker ([`a2077a3`](https://github.com/omauriciomaciel/activity-tracker/commit/a2077a36f8dae48addd10ad8ce787c46abb3f6c9))
 
 ## v1.5.0 (2026-06-12)
 
-### Chores
+### Chore
 
-- **ci**: Remove build para Windows e atualiza dependências
-  ([`bd8c2b1`](https://github.com/omauriciomaciel/activity-tracker/commit/bd8c2b1b11a6d3f7d75ecfa90f2e7eb68c833ae2))
+* chore(ci): remove build para Windows e atualiza dependências
+
+* Remove o alvo e o empacotamento para Windows do fluxo de release.
+* Altera o `reqwest` para utilizar `rustls-tls`, eliminando a dependência de `native-tls`.
+* Atualiza o `Cargo.lock` com novas dependências, incluindo `quinn` e `rand`.
+* Simplifica a árvore de dependências removendo crates específicos de sistema que não são mais utilizados. ([`bd8c2b1`](https://github.com/omauriciomaciel/activity-tracker/commit/bd8c2b1b11a6d3f7d75ecfa90f2e7eb68c833ae2))
 
 ### Documentation
 
-- **readme**: Atualiza instruções de instalação e uso de aliases
-  ([`47596a7`](https://github.com/omauriciomaciel/activity-tracker/commit/47596a74a40424ae8dfe6402b3afb3a329581560))
+* docs(readme): atualiza instruções de instalação e uso de aliases
 
-### Features
+- Documenta a adição de aliases `at` e `ats` no shell
+- Atualiza exemplos de comandos para utilizar os novos aliases
+- Detalha a disponibilidade de aliases para distribuições .deb no Linux
+- Corrige a descrição da coleta de commits do Git para maior precisão ([`47596a7`](https://github.com/omauriciomaciel/activity-tracker/commit/47596a74a40424ae8dfe6402b3afb3a329581560))
 
-- **collector**: Captura múltiplos commits por repositório
-  ([`4072dae`](https://github.com/omauriciomaciel/activity-tracker/commit/4072dae55a963757e45d239f6c8d3e8176e87791))
+### Feature
 
-- **install**: Adiciona aliases `at` e `ats` para o CLI
-  ([`5a2a7b4`](https://github.com/omauriciomaciel/activity-tracker/commit/5a2a7b4de4475889197cd01550c8ca8e96e179b1))
+* feat(install): adiciona aliases &#39;at&#39; e &#39;ats&#39; para o CLI
 
+- Facilita o acesso ao binário através de atalhos curtos no shell
+- Integra a configuração de aliases ao script de instalação
+- Inclui suporte para pacotes .deb via profile.d no workflow de release
+- Atualiza as instruções finais de instalação para refletir os aliases ([`5a2a7b4`](https://github.com/omauriciomaciel/activity-tracker/commit/5a2a7b4de4475889197cd01550c8ca8e96e179b1))
+
+* feat(collector): captura múltiplos commits por repositório
+
+- Altera GitRepoInfo para armazenar uma lista de commits em vez de apenas um
+- Atualiza a captura do git log para buscar todos os commits do dia
+- Mantém compatibilidade com logs antigos que usam o campo last_commit
+- Ajusta a agregação e a exibição para listar todos os commits encontrados
+- Melhora a filtragem de data na limpeza de arquivos de log ([`4072dae`](https://github.com/omauriciomaciel/activity-tracker/commit/4072dae55a963757e45d239f6c8d3e8176e87791))
+
+### Unknown
+
+* 1.5.0
+
+Automatically generated by python-semantic-release ([`02fec60`](https://github.com/omauriciomaciel/activity-tracker/commit/02fec605fe28106a5c69272301f023851096092b))
+
+* Merge pull request #2 from omauriciomaciel/feat/compilacao
+
+chore(ci): remove build para Windows e atualiza dependências ([`fa53cd4`](https://github.com/omauriciomaciel/activity-tracker/commit/fa53cd42de32cc19bfd9fc2a9eb8018749e67e1b))
 
 ## v1.4.0 (2026-06-12)
 
-### Chores
+### Chore
 
-- **ci**: Automatiza build e release com semantic-release
-  ([`8b2bb91`](https://github.com/omauriciomaciel/activity-tracker/commit/8b2bb916a6b3c6af7020e1a1d06d3ef3d25325f2))
+* chore(ci): automatiza build e release com semantic-release
 
-### Features
+- Integra build workflow ao fluxo de semantic-release
+- Adiciona suporte a empacotamento para Windows (.zip)
+- Permite disparar builds manualmente via workflow_dispatch
+- Move a geração de checksums para após a conclusão do build ([`8b2bb91`](https://github.com/omauriciomaciel/activity-tracker/commit/8b2bb916a6b3c6af7020e1a1d06d3ef3d25325f2))
 
-- **summarizer**: Adiciona suporte a múltiplos providers de LLM (OpenAI, Anthropic, Groq, Gemini, OpenRouter)
-  ([`6b8e775`](https://github.com/omauriciomaciel/activity-tracker/commit/6b8e775e8a2de15ed8fdfe5c92ed4d8381500066))
+### Feature
 
+* feat(summarizer): adiciona suporte a múltiplos providers de LLM
+
+- Implementa integração com OpenAI, Anthropic, Groq, Gemini e OpenRouter
+- Adiciona configurações de provider e API key ao sistema de config
+- Permite override de provider e modelo via argumentos de CLI
+- Atualiza documentação com tabela de providers e exemplos de uso ([`6b8e775`](https://github.com/omauriciomaciel/activity-tracker/commit/6b8e775e8a2de15ed8fdfe5c92ed4d8381500066))
+
+### Unknown
+
+* 1.4.0
+
+Automatically generated by python-semantic-release ([`0c77e1f`](https://github.com/omauriciomaciel/activity-tracker/commit/0c77e1fd5610267374031f5edc097c7d69a415f4))
+
+* Merge pull request #1 from omauriciomaciel/feat/fontes-api-llm
+
+Adiciona suporte a múltiplos providers de LLM ([`9244181`](https://github.com/omauriciomaciel/activity-tracker/commit/9244181abbaf8cfdbbc530059c84761ef8ec4489))
 
 ## v1.3.0 (2026-06-12)
 
-### Features
+### Feature
 
-- **ci**: Implementa pipeline de build e release automatizado com artefatos por plataforma
-  ([`fac3f7e`](https://github.com/omauriciomaciel/activity-tracker/commit/fac3f7e85d1ded83b72931924975ac1a7b03e853))
+* feat(updater): implementa sistema de atualização automática via GitHub
 
-- **updater**: Implementa sistema de atualização automática via GitHub Releases (download de binário pré-compilado)
-  ([`94f533a`](https://github.com/omauriciomaciel/activity-tracker/commit/94f533a6b80ffacb1c70a7fbc42761a4cf9e7b3a))
+- Substitui atualização via git pull por download de assets da API do GitHub
+- Adiciona suporte a extração de binários de arquivos .tar.gz e .zip
+- Implementa substituição atômica do binário para evitar downtime
+- Atualiza workflow de CI para incluir arquitetura Rust nos nomes dos arquivos ([`94f533a`](https://github.com/omauriciomaciel/activity-tracker/commit/94f533a6b80ffacb1c70a7fbc42761a4cf9e7b3a))
 
+* feat(ci): implementa pipeline de build e release automatizado
+
+- Adiciona workflow do GitHub Actions para builds multiplatforma
+- Implementa empacotamento para Linux (.deb, .tar.gz) e macOS (.dmg, .tar.gz)
+- Configura geração de checksums SHA256 para todos os artefatos
+- Habilita upload de releases no semantic-release.toml ([`fac3f7e`](https://github.com/omauriciomaciel/activity-tracker/commit/fac3f7e85d1ded83b72931924975ac1a7b03e853))
+
+### Unknown
+
+* 1.3.0
+
+Automatically generated by python-semantic-release ([`e3025e2`](https://github.com/omauriciomaciel/activity-tracker/commit/e3025e204de26c96dfea63b0b736427820beae47))
 
 ## v1.2.0 (2026-06-09)
 
-### Features
+### Feature
 
-- **notion**: Implementa integração para exportar resumos como páginas no Notion
-  ([`a553bd1`](https://github.com/omauriciomaciel/activity-tracker/commit/a553bd17507e7564fdfb96e9ceb4c2352a39f7ab))
+* feat(notion): implementa integração para exportar resumos
 
+- Adiciona módulo de integração com a API do Notion
+- Implementa conversor de Markdown para blocos do Notion
+- Adiciona configurações de token, page ID e nome da máquina
+- Cria atalho `--today` para resumos do dia atual
+- Atualiza documentação com guia de instalação para macOS e Linux ([`a553bd1`](https://github.com/omauriciomaciel/activity-tracker/commit/a553bd17507e7564fdfb96e9ceb4c2352a39f7ab))
+
+### Unknown
+
+* 1.2.0
+
+Automatically generated by python-semantic-release ([`c2dd0ed`](https://github.com/omauriciomaciel/activity-tracker/commit/c2dd0ed08ef9a2926e6bc3f0d0d262d7c9169998))
 
 ## v1.1.0 (2026-06-09)
 
-### Bug Fixes
+### Feature
 
-- **collector**: Restringe permissões de arquivos sensíveis
-  ([`0f9d276`](https://github.com/omauriciomaciel/activity-tracker/commit/0f9d2767676352b298ab0fb90b1ffc2cbe48775d))
+* feat(install): adiciona suporte a autostart no macOS
 
-- **security**: Reforça proteção de dados e validações de rede
-  ([`2bd2304`](https://github.com/omauriciomaciel/activity-tracker/commit/2bd2304eb15d826d41d76ea5684359c7126f6964))
+- Implementa configuração via launchd para inicialização automática
+- Cria arquivo .plist com logs redirecionados para pasta local
+- Adiciona guia interativo para concessão de permissões de sistema
+- Atualiza lógica de detecção de SO para diferenciar Linux e macOS ([`89694f6`](https://github.com/omauriciomaciel/activity-tracker/commit/89694f6fc497ee7090ef42e420b491a991ccc96b))
 
-### Code Style
+### Fix
 
-- **core**: Aplica formatação e simplifica sintaxe
-  ([`f269517`](https://github.com/omauriciomaciel/activity-tracker/commit/f269517c3d3723e217e3f18a65a498eb536a47f3))
+* fix(security): reforça proteção de dados e validações de rede
 
-### Features
+- Impede que o coletor de git siga symlinks para fora do HOME
+- Redige segredos e tokens em comandos do terminal capturados
+- Valida URLs do Ollama para evitar ataques de SSRF
+- Implementa substituição atômica do binário no updater
+- Adiciona aviso sobre uso de HTTP não criptografado no git remote ([`2bd2304`](https://github.com/omauriciomaciel/activity-tracker/commit/2bd2304eb15d826d41d76ea5684359c7126f6964))
 
-- **install**: Adiciona suporte a autostart no macOS via LaunchAgent
-  ([`89694f6`](https://github.com/omauriciomaciel/activity-tracker/commit/89694f6fc497ee7090ef42e420b491a991ccc96b))
+* fix(collector): restringe permissões de arquivos sensíveis
 
+- Define permissões 0600 para arquivos de log e markers no Unix
+- Move arquivos temporários do Chrome para diretórios de dados locais
+- Previne ataques de TOCTOU e exposição de dados em pastas públicas
+- Garante a remoção de arquivos temporários em caso de falha na cópia ([`0f9d276`](https://github.com/omauriciomaciel/activity-tracker/commit/0f9d2767676352b298ab0fb90b1ffc2cbe48775d))
+
+### Style
+
+* style(core): aplica formatação e simplifica sintaxe
+
+- Ajusta a indentação e quebra de linhas em múltiplos arquivos
+- Simplifica a captura de histórico do shell usando `split_once`
+- Utiliza a sintaxe de `if let` encadeado para reduzir aninhamento
+- Otimiza a ordenação de apps utilizando `sort_by_key` com `Reverse`
+- Corrige inconsistências de estilo e remove redundâncias de strings ([`f269517`](https://github.com/omauriciomaciel/activity-tracker/commit/f269517c3d3723e217e3f18a65a498eb536a47f3))
+
+### Unknown
+
+* 1.1.0
+
+Automatically generated by python-semantic-release ([`ceab61a`](https://github.com/omauriciomaciel/activity-tracker/commit/ceab61a05440cd23cbd071425327cfd67d26d6b8))
 
 ## v1.0.0 (2026-06-08)
 
-### Features
+### Chore
 
-- **core**: Implementa sistema de rastreamento de atividades com Ollama
-  ([`29de80f`](https://github.com/omauriciomaciel/activity-tracker/commit/29de80f))
+* chore(ci): implementa release automatizado com semantic-release
 
-- **daemon**: Implementa gestão de processos e autostart via systemd
-  ([`71ebb3f`](https://github.com/omauriciomaciel/activity-tracker/commit/71ebb3f))
+- Configura workflow do GitHub Actions para builds na branch main
+- Define regras de versionamento semântico no semantic_release.toml
+- Automatiza a atualização de versão no Cargo.toml e geração de changelog
+- Garante consistência nas tags de versão e histórico de releases ([`8d1dea5`](https://github.com/omauriciomaciel/activity-tracker/commit/8d1dea546d029662acac8ba11150b0ebad632a1f))
 
-- **summary**: Adiciona suporte a resumo de data específica (`--date`)
-  ([`bf545f5`](https://github.com/omauriciomaciel/activity-tracker/commit/bf545f5))
+* chore(project): reestrutura arquivos e atualiza reqwest
 
-- **collector**: Implementa filtragem por data e limpeza de logs
-  ([`b66d6d4`](https://github.com/omauriciomaciel/activity-tracker/commit/b66d6d4))
+- Move arquivos da raiz para o diretório src para seguir padrão Rust
+- Adiciona feature blocking ao reqwest para simplificar chamadas HTTP
+- Atualiza Cargo.lock com as novas dependências e estrutura ([`2067021`](https://github.com/omauriciomaciel/activity-tracker/commit/2067021d8a22b488b8e39346888dad8242c139f3))
 
-- **updater**: Adiciona comando de atualização automática
-  ([`a2e5534`](https://github.com/omauriciomaciel/activity-tracker/commit/a2e5534))
+* chore(deps): atualiza edição do Rust para 2024
 
-- **summarizer**: Aprimora processamento de logs e sites
-  ([`c44487f`](https://github.com/omauriciomaciel/activity-tracker/commit/c44487f))
+- Mantém o projeto atualizado com a versão mais recente da linguagem
+- Habilita novas funcionalidades e melhorias de performance do compilador ([`b10ea7f`](https://github.com/omauriciomaciel/activity-tracker/commit/b10ea7f0825486b76ecbfd521a887754d2c536fa))
 
-- **summarizer**: Melhora a formatação visual da saída no terminal
-  ([`67a1cc8`](https://github.com/omauriciomaciel/activity-tracker/commit/67a1cc8))
+* chore(git): ignora diretório .serena
 
-- **infra**: Adiciona script de instalação automatizada (`install.sh`)
-  ([`6a9230a`](https://github.com/omauriciomaciel/activity-tracker/commit/6a9230a))
-
-### Bug Fixes
-
-- **collector**: Limpa logs após coleta e valida datas de commit
-  ([`9bb6c03`](https://github.com/omauriciomaciel/activity-tracker/commit/9bb6c03))
-
-- **collector**: Permite coleta de histórico sem timestamps
-  ([`48ef3ff`](https://github.com/omauriciomaciel/activity-tracker/commit/48ef3ff))
-
-- **core**: Garante consistência na instalação e respostas
-  ([`4697555`](https://github.com/omauriciomaciel/activity-tracker/commit/4697555))
-
-### Refactor
-
-- **summarizer**: Otimiza agregação de dados e contexto do LLM
-  ([`31b4355`](https://github.com/omauriciomaciel/activity-tracker/commit/31b4355))
+- Evita que arquivos de configuração local da ferramenta Serena sejam rastreados
+- Garante que configurações específicas do ambiente de desenvolvimento não sejam commitadas ([`a9c3933`](https://github.com/omauriciomaciel/activity-tracker/commit/a9c3933e7af4911d0c8f384ca805c173e2b5cfc4))
 
 ### Documentation
 
-- **readme**: Detalha instalação e gestão do daemon
-  ([`eb23fa5`](https://github.com/omauriciomaciel/activity-tracker/commit/eb23fa5))
+* docs(readme): detalha instalação e gestão do daemon
 
-- Adiciona documentação inicial do projeto
-  ([`4015dc2`](https://github.com/omauriciomaciel/activity-tracker/commit/4015dc2))
+- Explica a configuração automática do serviço systemd via install.sh
+- Adiciona comandos de controle do daemon (stop, status) e systemctl
+- Documenta a ativação do linger para persistência do serviço
+- Inclui o caminho do arquivo PID na tabela de arquivos do sistema ([`eb23fa5`](https://github.com/omauriciomaciel/activity-tracker/commit/eb23fa5bfaea24b70c5745b748eaac6780ead5d6))
 
-### Chores
+* docs: adiciona documentação inicial do projeto
 
-- **ci**: Implementa release automatizado com semantic-release
-  ([`8d1dea5`](https://github.com/omauriciomaciel/activity-tracker/commit/8d1dea5))
+- Cria README.md com guia de instalação e uso do daemon
+- Detalha fontes de captura de atividade e armazenamento de logs
+- Descreve a configuração do Ollama e integração com Chrome
+- Fornece exemplos de comandos para coleta e geração de resumos ([`4015dc2`](https://github.com/omauriciomaciel/activity-tracker/commit/4015dc286620a0595c91227715ae3be6880db9ab))
 
-- **deps**: Atualiza edição do Rust para 2024
-  ([`b10ea7f`](https://github.com/omauriciomaciel/activity-tracker/commit/b10ea7f))
+### Feature
 
-- **project**: Reestrutura arquivos e atualiza reqwest
-  ([`2067021`](https://github.com/omauriciomaciel/activity-tracker/commit/2067021))
+* feat(summarizer): aprimora processamento de logs e sites
+
+- Processa linhas de log em ordem reversa para priorizar eventos recentes
+- Agrupa sites visitados duplicados com contagem de ocorrências
+- Melhora a legibilidade do contexto ao consolidar títulos repetidos
+- Garante a limpeza de linhas vazias antes da iteração de logs ([`c44487f`](https://github.com/omauriciomaciel/activity-tracker/commit/c44487fc7562cda0138f1aca4788b0708dd14aa9))
+
+* feat(summarizer): melhora a formatação visual da saída no terminal
+
+- Adiciona dependências `colored` e `termimad` para estilização
+- Implementa cores e negrito em avisos e mensagens de status
+- Substitui a impressão de texto simples por renderização Markdown
+- Melhora a legibilidade do resumo com bordas e cores contrastantes ([`67a1cc8`](https://github.com/omauriciomaciel/activity-tracker/commit/67a1cc884a641ba0efb7033702c3de4b0dc7ae9a))
+
+* feat(updater): adiciona comando de atualização automática
+
+- Implementa fluxo de atualização via git pull e cargo build
+- Permite que o usuário atualize o binário sem intervenção manual
+- Adiciona novo comando &#39;update&#39; ao CLI
+- Garante a substituição do binário atual pelo novo compilado ([`a2e5534`](https://github.com/omauriciomaciel/activity-tracker/commit/a2e5534e66e19158d0da126cf4749503d2ce5d08))
+
+* feat(collector): implementa filtragem por data e limpeza de logs
+
+- Filtra comandos de shell (Bash, Zsh, Fish) e commits Git por data atual
+- Remove comandos triviais como &#39;ls&#39;, &#39;cd&#39; e &#39;pwd&#39; da coleta
+- Adiciona comando `clean-logs` para remover entradas obsoletas de arquivos JSONL
+- Melhora a precisão do parse de timestamps no histórico do Bash e Zsh ([`b66d6d4`](https://github.com/omauriciomaciel/activity-tracker/commit/b66d6d4b92e451e5c45a60595359559c49bdec27))
+
+* feat(daemon): implementa gestão de processos e autostart via systemd
+
+- Adiciona suporte a execução em background e controle via PID file
+- Implementa comandos de stop e status para gerenciar o daemon
+- Integra instalação automática com systemd para boot no login
+- Otimiza coleta de dados usando spawn_blocking para evitar travamentos ([`71ebb3f`](https://github.com/omauriciomaciel/activity-tracker/commit/71ebb3f74f1a44fae1a246fd88f4c477138b0a92))
+
+* feat(summary): adiciona suporte a resumo de data específica
+
+- Permite gerar resumos de um dia exato via flag --date
+- Implementa parsing de data no formato YYYY-DD-MM
+- Prioriza a data específica sobre o intervalo de dias
+- Atualiza documentação do README com o novo comando ([`bf545f5`](https://github.com/omauriciomaciel/activity-tracker/commit/bf545f5662817a571e11d392237d7c1f616fae4c))
+
+* feat(infra): adiciona script de instalação automatizada
+
+- Automatiza o processo de compilação e instalação do binário
+- Valida dependências obrigatórias como Rust/Cargo e Ollama
+- Verifica a presença de wmctrl para captura de janelas X11
+- Orienta o usuário sobre a configuração do PATH do sistema ([`6a9230a`](https://github.com/omauriciomaciel/activity-tracker/commit/6a9230a776b5b42f7b3155fa767978a936ea66e9))
+
+* feat(core): implementa sistema de rastreamento de atividades com Ollama
+
+- Adiciona coleta de histórico de shell, janelas abertas e abas do Chrome
+- Implementa daemon para captura periódica e persistência em JSONL
+- Cria integrador com Ollama para geração de resumos de produtividade
+- Adiciona CLI para gestão de configurações, coleta manual e sumarização ([`29de80f`](https://github.com/omauriciomaciel/activity-tracker/commit/29de80f187d5f6d1efca4514832c07ca2dcd82bd))
+
+### Fix
+
+* fix(collector): limpa logs após coleta e valida datas de commit
+
+- Chama clean_all_logs para evitar duplicidade em coletas futuras
+- Valida se a data do commit coincide com a data do arquivo de log
+- Evita agregação de dados incorretos no sumário de atividades
+- Garante que apenas eventos do dia correspondente sejam contabilizados ([`9bb6c03`](https://github.com/omauriciomaciel/activity-tracker/commit/9bb6c03036dcdcbd99104c78116a37931ddca015))
+
+* fix(collector): permite coleta de histórico sem timestamps
+
+- Evita perda de comandos quando HISTTIMEFORMAT não está ativo
+- Retorna todas as linhas novas se nenhum marcador de data for detectado
+- Garante a limpeza de espaços e linhas vazias no modo sem timestamp
+- Mantém a compatibilidade com o filtro de data quando disponível ([`48ef3ff`](https://github.com/omauriciomaciel/activity-tracker/commit/48ef3ff85d6dbc51a91a1d3b49acd8619d424744))
+
+* fix(core): garante consistência na instalação e respostas
+
+- Remove binários existentes antes de copiar para evitar erro de arquivo ocupado
+- Adiciona seed e zera temperatura no Ollama para respostas determinísticas
+- Garante que o processo de atualização não falhe quando o daemon está ativo ([`4697555`](https://github.com/omauriciomaciel/activity-tracker/commit/4697555738c1efa8a1d9e9b323ebf857d035bde9))
+
+### Refactor
+
+* refactor(summarizer): otimiza agregação de dados e contexto do LLM
+
+- Substitui JSON por texto plano no contexto para reduzir tokens
+- Implementa filtragem de ruídos e timestamps no histórico do shell
+- Remove prefixos de hostname dos títulos de janelas do wmctrl
+- Adiciona deduplicação de comandos e URLs visitadas
+- Refina a estrutura de dados agregados com o novo tipo ActivityData ([`31b4355`](https://github.com/omauriciomaciel/activity-tracker/commit/31b4355027530a8e223e7090637715d05c6b14e1))
+
+### Style
+
+* style(cli): remove emojis e simplifica mensagens de log
+
+- Substitui emojis por prefixos de texto em mensagens de erro e aviso
+- Remove ícones decorativos de logs do daemon, config e summarizer
+- Simplifica separadores visuais de bordas no resumo de atividades
+- Atualiza script de instalação para usar tags de texto simples ([`92162eb`](https://github.com/omauriciomaciel/activity-tracker/commit/92162eb0f565d98295503f91c4e041e3cfe8e6a1))
+
+### Unknown
+
+* 1.0.0
+
+Automatically generated by python-semantic-release ([`8ca65ab`](https://github.com/omauriciomaciel/activity-tracker/commit/8ca65aba73660b812645a2b23425fad94b89def6))
+
+* Initial commit ([`7ab7adf`](https://github.com/omauriciomaciel/activity-tracker/commit/7ab7adf8cfd6eee0c54c2aefde069ef3fdf43f88))
