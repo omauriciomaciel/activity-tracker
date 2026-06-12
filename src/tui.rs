@@ -629,6 +629,22 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
     }
 
     if !data.tabs.is_empty() {
+        // Deduplicar: manter ordem de primeira ocorrência, contar repetições
+        let mut counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let mut ordered: Vec<String> = Vec::new();
+        for (title, url) in &data.tabs {
+            let label = if title.is_empty() || title == url {
+                url.clone()
+            } else {
+                title.clone()
+            };
+            let n = counts.entry(label.clone()).or_insert(0);
+            if *n == 0 {
+                ordered.push(label);
+            }
+            *n += 1;
+        }
         lines.push(Line::from(Span::styled(
             format!("■ SITES  ({} abas)", data.tabs.len()),
             Style::default()
@@ -639,15 +655,17 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
             "─".repeat(60),
             Style::default().fg(Color::DarkGray),
         )));
-        for (title, url) in &data.tabs {
-            let label = if title.is_empty() || title == url {
-                url.as_str()
+        for label in ordered {
+            let count = counts[&label];
+            let suffix = if count > 1 {
+                format!(" [{count}x]")
             } else {
-                title.as_str()
+                String::new()
             };
             lines.push(Line::from(vec![
                 Span::styled("  · ", Style::default().fg(Color::DarkGray)),
                 Span::raw(label),
+                Span::styled(suffix, Style::default().fg(Color::DarkGray)),
             ]));
         }
         lines.push(Line::from(""));
