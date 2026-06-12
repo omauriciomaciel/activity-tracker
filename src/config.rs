@@ -24,6 +24,11 @@ pub struct Config {
     /// termos (case-insensitive) são removidos dos logs antes de salvar.
     #[serde(default)]
     pub blocked_patterns: Vec<String>,
+    /// Prompt customizado enviado ao LLM. Use {context} para injetar os dados coletados
+    /// e {lang} para injetar a instrução de idioma. Se {context} for omitido, os dados
+    /// são anexados automaticamente ao final.
+    #[serde(default)]
+    pub custom_prompt: Option<String>,
 }
 
 fn default_provider() -> String {
@@ -43,6 +48,7 @@ impl Default for Config {
             machine_name: None,
             slack_webhook: None,
             blocked_patterns: Vec::new(),
+            custom_prompt: None,
         }
     }
 }
@@ -112,13 +118,25 @@ impl Config {
                 self.blocked_patterns.join(", ")
             )
         };
+        let prompt_line = match &self.custom_prompt {
+            Some(p) => {
+                let preview = if p.len() > 60 {
+                    format!("{}…", &p[..60])
+                } else {
+                    p.clone()
+                };
+                format!("  prompt:     {preview}")
+            }
+            None => "  prompt:     padrão".to_string(),
+        };
         format!(
-            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n  máquina:    {}\n  notion:     {}\n  slack:      {}\n{}\n  logs:       {}\n  config:     {}",
+            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n{}\n  máquina:    {}\n  notion:     {}\n  slack:      {}\n{}\n  logs:       {}\n  config:     {}",
             config_path().display(),
             self.provider,
             self.model,
             api_line,
             self.lang,
+            prompt_line,
             self.get_machine_name(),
             if self.notion_token.is_some() && self.notion_page_id.is_some() {
                 "configurado"

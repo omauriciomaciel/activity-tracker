@@ -182,6 +182,7 @@ pub struct RunOptions<'a> {
     pub notion: Option<(&'a str, &'a str)>,
     pub slack: Option<&'a str>,
     pub search: Option<&'a str>,
+    pub custom_prompt: Option<&'a str>,
 }
 
 pub async fn run(opts: RunOptions<'_>) -> Result<()> {
@@ -197,6 +198,7 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
         notion,
         slack,
         search,
+        custom_prompt,
     } = opts;
     let log_dir = config::log_dir();
 
@@ -274,7 +276,7 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
         "{}",
         format!("Enviando para {provider} (modelo: {model})...").dimmed()
     );
-    let summary = call_llm(provider, ollama_url, api_key, model, &context, lang).await?;
+    let summary = call_llm(provider, ollama_url, api_key, model, &context, lang, custom_prompt).await?;
 
     let border = "━".repeat(47);
 
@@ -821,30 +823,35 @@ fn validate_url(url: &str) -> Result<()> {
     Ok(())
 }
 
-fn build_prompt(context: &str, lang: &str) -> String {
-    let lang_instruction = match lang {
-        "pt-br" => "Responda em português brasileiro.",
-        "en" => "Answer in English.",
-        "es" => "Responde en español.",
-        other => {
-            return format!(
-                "Respond in {other}.\n\nDados coletados:\n\n{context}\nProduza:\n1. **Resumo Geral**: O que o usuário fez, em 2-3 parágrafos.\n2. **Projetos Identificados**: Projetos ou tarefas em andamento.\n3. **Ferramentas Mais Usadas**: Apps e ferramentas mais utilizados.\n4. **Sites e Pesquisas**: O que foi pesquisado ou lido online.\n5. **Sugestões**: Observações úteis sobre produtividade.\n\nSeja conciso. Não invente informações além dos dados."
-            );
-        }
-    };
-    format!(
-        "Você é um assistente que analisa dados de atividade de computador e produz um resumo claro.\n\
-         {lang_instruction}\n\n\
-         Dados coletados:\n\n\
-         {context}\n\
-         Produza:\n\
-         1. **Resumo Geral**: O que o usuário fez, em 2-3 parágrafos.\n\
-         2. **Projetos Identificados**: Projetos ou tarefas em andamento.\n\
-         3. **Ferramentas Mais Usadas**: Apps e ferramentas mais utilizados.\n\
-         4. **Sites e Pesquisas**: O que foi pesquisado ou lido online.\n\
-         5. **Sugestões**: Observações úteis sobre produtividade.\n\n\
-         Seja conciso. Não invente informações além dos dados."
-    )
+// \n aqui são dois chars literais (backslash + n), não newlines reais.
+// build_prompt interpreta \n → newline antes de enviar ao LLM.
+// Isso permite edição legível na TUI e via CLI sem escapes especiais.
+pub const DEFAULT_PROMPT_TEMPLATE: &str = r"Você é um assistente que analisa dados de atividade de computador e produz um resumo claro.\n{lang}\n\nDados coletados:\n\n{context}\nProduza:\n1. **Resumo Geral**: O que o usuário fez, em 2-3 parágrafos.\n2. **Projetos Identificados**: Projetos ou tarefas em andamento.\n3. **Ferramentas Mais Usadas**: Apps e ferramentas mais utilizados.\n4. **Sites e Pesquisas**: O que foi pesquisado ou lido online.\n5. **Sugestões**: Observações úteis sobre produtividade.\n\nSeja conciso. Não invente informações além dos dados.";
+
+fn lang_str(lang: &str) -> String {
+    match lang {
+        "pt-br" => "Responda em português brasileiro.".into(),
+        "en" => "Answer in English.".into(),
+        "es" => "Responde en español.".into(),
+        "fr" => "Répondez en français.".into(),
+        "de" => "Antworten Sie auf Deutsch.".into(),
+        "ja" => "日本語で回答してください。".into(),
+        "zh" => "请用中文回答。".into(),
+        other => format!("Respond in {other}."),
+    }
+}
+
+fn build_prompt(context: &str, lang: &str, custom_prompt: Option<&str>) -> String {
+    let template = custom_prompt.unwrap_or(DEFAULT_PROMPT_TEMPLATE);
+    // Interpreta \n literal (dois chars) como newline real
+    let template = template.replace(r"\n", "\n");
+    let lang_instruction = lang_str(lang);
+    let result = template.replace("{lang}", &lang_instruction);
+    if result.contains("{context}") {
+        result.replace("{context}", context)
+    } else {
+        format!("{result}\n\nDados coletados:\n\n{context}")
+    }
 }
 
 pub(crate) async fn call_llm(
@@ -854,8 +861,9 @@ pub(crate) async fn call_llm(
     model: &str,
     context: &str,
     lang: &str,
+    custom_prompt: Option<&str>,
 ) -> Result<String> {
-    let prompt = build_prompt(context, lang);
+    let prompt = build_prompt(context, lang, custom_prompt);
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()?;

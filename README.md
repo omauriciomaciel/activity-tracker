@@ -126,6 +126,8 @@ at config set-notion-token secret_xxx
 at config set-notion-page <page_id>
 at config set-slack-webhook https://hooks.slack.com/services/...
 at config set-machine-name "MacBook Pro"  # opcional, usa hostname se omitido
+at config set-prompt "Você é um gerente de produto. {lang}\n\n{context}\n\nFaça um relatório em bullet points."
+at config clear-prompt              # volta ao prompt padrão
 at config show
 ```
 

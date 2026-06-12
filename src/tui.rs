@@ -25,11 +25,12 @@ const CF_PROVIDER: usize = 0;
 const CF_MODEL: usize = 1;
 const CF_URL_OR_KEY: usize = 2;
 const CF_LANG: usize = 3;
-const CF_MACHINE: usize = 4;
-const CF_NOTION_TOKEN: usize = 5;
-const CF_NOTION_PAGE: usize = 6;
-const CF_SLACK: usize = 7;
-const CF_ADD_BLOCK: usize = 8;
+const CF_PROMPT: usize = 4;
+const CF_MACHINE: usize = 5;
+const CF_NOTION_TOKEN: usize = 6;
+const CF_NOTION_PAGE: usize = 7;
+const CF_SLACK: usize = 8;
+const CF_ADD_BLOCK: usize = 9;
 // CF_ADD_BLOCK + 1 + i  →  blocked_patterns[i]
 
 const PROVIDERS: &[&str] = &[
@@ -53,7 +54,7 @@ enum ActiveTab {
 #[derive(PartialEq)]
 enum ConfigEditMode {
     Browse,
-    Editing(String),
+    Editing(String, usize), // (buffer, cursor char index)
 }
 
 enum SummaryState {
@@ -224,7 +225,7 @@ async fn event_loop(
                 }
                 // ── Config tab gets full key control ────────────────────
                 if app.active_tab == ActiveTab::Config {
-                    let editing = matches!(app.config_edit, ConfigEditMode::Editing(_));
+                    let editing = matches!(app.config_edit, ConfigEditMode::Editing(_, _));
                     if editing {
                         match key.code {
                             KeyCode::Esc => {
@@ -233,10 +234,9 @@ async fn event_loop(
                             KeyCode::Enter => {
                                 let old =
                                     std::mem::replace(&mut app.config_edit, ConfigEditMode::Browse);
-                                if let ConfigEditMode::Editing(buf) = old {
+                                if let ConfigEditMode::Editing(buf, _) = old {
                                     cfg_apply(&mut app.config, app.config_cursor, buf);
                                     let _ = app.config.save();
-                                    // bump cursor past new block entry
                                     if app.config_cursor == CF_ADD_BLOCK {
                                         app.config_cursor =
                                             CF_ADD_BLOCK + app.config.blocked_patterns.len();
@@ -244,13 +244,58 @@ async fn event_loop(
                                 }
                             }
                             KeyCode::Backspace => {
-                                if let ConfigEditMode::Editing(b) = &mut app.config_edit {
-                                    b.pop();
+                                if let ConfigEditMode::Editing(b, cur) = &mut app.config_edit {
+                                    edit_cursor_backspace(b, cur);
+                                }
+                            }
+                            KeyCode::Delete => {
+                                if let ConfigEditMode::Editing(b, cur) = &mut app.config_edit {
+                                    edit_cursor_delete(b, *cur);
+                                }
+                            }
+                            KeyCode::Up => {
+                                if let ConfigEditMode::Editing(b, cur) = &mut app.config_edit {
+                                    *cur = edit_cursor_up(b, *cur);
+                                }
+                            }
+                            KeyCode::Down => {
+                                if let ConfigEditMode::Editing(b, cur) = &mut app.config_edit {
+                                    *cur = edit_cursor_down(b, *cur);
+                                }
+                            }
+                            KeyCode::Left => {
+                                if let ConfigEditMode::Editing(_, cur) = &mut app.config_edit {
+                                    *cur = cur.saturating_sub(1);
+                                }
+                            }
+                            KeyCode::Right => {
+                                if let ConfigEditMode::Editing(b, cur) = &mut app.config_edit {
+                                    let max = b.chars().count();
+                                    if *cur < max { *cur += 1; }
+                                }
+                            }
+                            KeyCode::Home => {
+                                if let ConfigEditMode::Editing(b, cur) = &mut app.config_edit {
+                                    // Ctrl+Home → posição 0; Home → início da linha atual
+                                    if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                                        *cur = 0;
+                                    } else {
+                                        *cur = edit_line_start(b, *cur);
+                                    }
+                                }
+                            }
+                            KeyCode::End => {
+                                if let ConfigEditMode::Editing(b, cur) = &mut app.config_edit {
+                                    if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                                        *cur = b.chars().count();
+                                    } else {
+                                        *cur = edit_line_end(b, *cur);
+                                    }
                                 }
                             }
                             KeyCode::Char(c) => {
-                                if let ConfigEditMode::Editing(b) = &mut app.config_edit {
-                                    b.push(c);
+                                if let ConfigEditMode::Editing(b, cur) = &mut app.config_edit {
+                                    edit_cursor_insert(b, cur, c);
                                 }
                             }
                             _ => {}
@@ -309,7 +354,8 @@ async fn event_loop(
                         // Enter / e → start editing
                         KeyCode::Enter | KeyCode::Char('e') => {
                             if let Some(val) = cfg_initial_value(&app.config, app.config_cursor) {
-                                app.config_edit = ConfigEditMode::Editing(val);
+                                let end = val.chars().count();
+                                app.config_edit = ConfigEditMode::Editing(val, end);
                             }
                         }
                         // d / Delete → remove blocked pattern
@@ -411,6 +457,7 @@ async fn event_loop(
                             let api_key = app.api_key.clone();
                             let model = app.model.clone();
                             let lang = app.lang.clone();
+                            let custom_prompt = app.config.custom_prompt.clone();
                             let tx = tx.clone();
                             app.summary = SummaryState::Loading;
                             app.active_tab = ActiveTab::Summary;
@@ -423,6 +470,7 @@ async fn event_loop(
                                     &model,
                                     &context,
                                     &lang,
+                                    custom_prompt.as_deref(),
                                 )
                                 .await
                                 .map_err(|e| e.to_string());
@@ -805,7 +853,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             format!(" {nav}  Tab aba  ↑↓/jk scroll  s semana  m mês  q sair ")
         }
         ActiveTab::Config => {
-            if matches!(app.config_edit, ConfigEditMode::Editing(_)) {
+            if matches!(app.config_edit, ConfigEditMode::Editing(_, _)) {
                 " Enter salvar  Esc cancelar ".to_string()
             } else {
                 " ↑↓/jk navegar  Enter/e editar  ← → ciclar  d deletar padrão  R reload  q sair "
@@ -821,8 +869,9 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 fn render_config(f: &mut Frame, app: &App, area: Rect) {
     let cfg = &app.config;
     let cur = app.config_cursor;
-    let edit_buf = match &app.config_edit {
-        ConfigEditMode::Editing(b) => Some(b.as_str()),
+    // edit_buf: Some((buffer, cursor_char_index)) quando em modo edição
+    let edit_buf: Option<(&str, usize)> = match &app.config_edit {
+        ConfigEditMode::Editing(b, cur) => Some((b.as_str(), *cur)),
         ConfigEditMode::Browse => None,
     };
 
@@ -878,9 +927,9 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
             },
         );
         let val = if editing {
-            let buf = edit_buf.unwrap_or("");
+            let (buf, cursor_pos) = edit_buf.unwrap_or(("", 0));
             Span::styled(
-                format!("{buf}█"),
+                edit_render_cursor(buf, cursor_pos),
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
@@ -929,6 +978,86 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
     };
     lines.push(field_row(CF_URL_OR_KEY, url_label, &url_val, false));
     lines.push(field_row(CF_LANG, "idioma", &cfg.lang, true));
+
+    // CF_PROMPT: rendering multi-linha customizado
+    {
+        let prompt_selected = cur == CF_PROMPT;
+        let prompt_editing = prompt_selected && edit_buf.is_some();
+        let prefix = if prompt_selected {
+            Span::styled(" > ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        } else {
+            Span::raw("   ")
+        };
+        let lbl = Span::styled(
+            format!("{:<18}", "prompt"),
+            if prompt_selected {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            },
+        );
+
+        if prompt_editing {
+            // Modo edição: divide por \n literal e mostra cada segmento como linha
+            let (buf, cursor_pos) = edit_buf.unwrap_or(("", 0));
+            // Insere █ na posição do cursor, depois divide por \n
+            let rendered = edit_render_cursor(buf, cursor_pos);
+            let parts: Vec<&str> = rendered.split(r"\n").collect();
+            let edit_style = Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD);
+
+            for (i, part) in parts.iter().enumerate() {
+                let text = part.to_string();
+                if i == 0 {
+                    lines.push(Line::from(vec![
+                        prefix.clone(),
+                        lbl.clone(),
+                        Span::styled(text, edit_style),
+                    ]));
+                } else {
+                    lines.push(Line::from(Span::styled(
+                        format!("   {:<18}{text}", ""),
+                        edit_style,
+                    )));
+                }
+            }
+            lines.push(Line::from(Span::styled(
+                "   [Enter = confirma  •  \\n = quebra de linha  •  Esc = cancela]",
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            let template = cfg.custom_prompt.as_deref()
+                .unwrap_or(summarizer::DEFAULT_PROMPT_TEMPLATE);
+            let parts: Vec<&str> = template.split(r"\n").collect();
+
+            // Primeira linha: prefixo + label + conteúdo
+            let first = parts.first().copied().unwrap_or("");
+            let val_style = if prompt_selected {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            lines.push(Line::from(vec![
+                prefix,
+                lbl,
+                Span::styled(first.to_string(), val_style),
+            ]));
+
+            // Linhas seguintes indentadas (sempre visíveis, não só quando selecionado)
+            for part in parts.iter().skip(1) {
+                lines.push(Line::from(Span::styled(
+                    format!("   {:<18}{}", "", part),
+                    val_style,
+                )));
+            }
+
+            if prompt_selected {
+                lines.push(Line::from(Span::styled(
+                    "   [Enter para editar  •  \\n = quebra de linha]",
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+    }
     lines.push(Line::from(""));
 
     // ── MÁQUINA ───────────────────────────────────────────────────────────────
@@ -1004,8 +1133,9 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         Span::raw("   ")
     };
     let add_val = if add_editing {
+        let (buf, cur) = edit_buf.unwrap_or(("", 0));
         Span::styled(
-            format!("{}█", edit_buf.unwrap_or("")),
+            edit_render_cursor(buf, cur),
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
@@ -1039,8 +1169,9 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("   ")
         };
         let val_span = if ed {
+            let (buf, cur) = edit_buf.unwrap_or(("", 0));
             Span::styled(
-                format!("{}█", edit_buf.unwrap_or("")),
+                edit_render_cursor(buf, cur),
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
@@ -1111,6 +1242,11 @@ fn cfg_initial_value(cfg: &Config, cursor: usize) -> Option<String> {
         } else {
             cfg.api_key.clone().unwrap_or_default()
         }),
+        CF_PROMPT => Some(
+            cfg.custom_prompt
+                .clone()
+                .unwrap_or_else(|| summarizer::DEFAULT_PROMPT_TEMPLATE.to_string()),
+        ),
         CF_MACHINE => Some(cfg.machine_name.clone().unwrap_or_default()),
         CF_NOTION_TOKEN => Some(cfg.notion_token.clone().unwrap_or_default()),
         CF_NOTION_PAGE => Some(cfg.notion_page_id.clone().unwrap_or_default()),
@@ -1132,6 +1268,7 @@ fn cfg_apply(cfg: &mut Config, cursor: usize, value: String) {
                 cfg.api_key = if v.is_empty() { None } else { Some(v) };
             }
         }
+        CF_PROMPT => cfg.custom_prompt = if v.is_empty() { None } else { Some(v) },
         CF_MACHINE => cfg.machine_name = if v.is_empty() { None } else { Some(v) },
         CF_NOTION_TOKEN => cfg.notion_token = if v.is_empty() { None } else { Some(v) },
         CF_NOTION_PAGE => cfg.notion_page_id = if v.is_empty() { None } else { Some(v) },
@@ -1152,5 +1289,124 @@ fn cfg_apply(cfg: &mut Config, cursor: usize, value: String) {
             }
         }
         _ => {}
+    }
+}
+
+// ── Edit cursor helpers ───────────────────────────────────────────────────────
+
+/// Insere char na posição do cursor e avança o cursor.
+fn edit_cursor_insert(buf: &mut String, cursor: &mut usize, c: char) {
+    let byte = buf.char_indices().nth(*cursor).map(|(i, _)| i).unwrap_or(buf.len());
+    buf.insert(byte, c);
+    *cursor += 1;
+}
+
+/// Apaga o char antes do cursor (Backspace).
+fn edit_cursor_backspace(buf: &mut String, cursor: &mut usize) {
+    if *cursor > 0 {
+        let byte = buf.char_indices().nth(*cursor - 1).map(|(i, _)| i).unwrap_or(0);
+        buf.remove(byte);
+        *cursor -= 1;
+    }
+}
+
+/// Apaga o char na posição do cursor (Delete).
+fn edit_cursor_delete(buf: &mut String, cursor: usize) {
+    if let Some((byte, _)) = buf.char_indices().nth(cursor) {
+        buf.remove(byte);
+    }
+}
+
+/// Produz a string de exibição com █ na posição do cursor.
+fn edit_render_cursor(buf: &str, cursor: usize) -> String {
+    let chars: Vec<char> = buf.chars().collect();
+    let cur = cursor.min(chars.len());
+    let before: String = chars[..cur].iter().collect();
+    let after: String = chars[cur..].iter().collect();
+    format!("{before}█{after}")
+}
+
+// ── Navegação por linha no buffer de edição ───────────────────────────────────
+// O separador de linha é o literal dois-chars "\n" (backslash + n).
+
+/// Retorna os índices de char onde cada linha começa.
+fn edit_line_starts(buf: &str) -> Vec<usize> {
+    let chars: Vec<char> = buf.chars().collect();
+    let mut starts = vec![0usize];
+    let mut i = 0;
+    while i + 1 < chars.len() {
+        if chars[i] == '\\' && chars[i + 1] == 'n' {
+            starts.push(i + 2);
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    starts
+}
+
+/// Retorna (índice_da_linha, coluna) para a posição de cursor dada.
+fn edit_line_col(buf: &str, cursor: usize) -> (usize, usize) {
+    let starts = edit_line_starts(buf);
+    let total = buf.chars().count();
+    let cursor = cursor.min(total);
+    // Percorre de trás para frente: a linha i começa em starts[i]
+    for i in (0..starts.len()).rev() {
+        if cursor >= starts[i] {
+            let line_end = if i + 1 < starts.len() {
+                starts[i + 1].saturating_sub(2)
+            } else {
+                total
+            };
+            let col = cursor.min(line_end) - starts[i];
+            return (i, col);
+        }
+    }
+    (0, 0)
+}
+
+/// Converte (linha, coluna) de volta para posição de cursor.
+fn edit_pos_from_line_col(buf: &str, line: usize, col: usize) -> usize {
+    let starts = edit_line_starts(buf);
+    let total = buf.chars().count();
+    let line_start = starts.get(line).copied().unwrap_or(total);
+    let line_end = if line + 1 < starts.len() {
+        starts[line + 1].saturating_sub(2)
+    } else {
+        total
+    };
+    (line_start + col).min(line_end)
+}
+
+/// Move o cursor uma linha acima, mantendo a coluna.
+fn edit_cursor_up(buf: &str, cursor: usize) -> usize {
+    let (line, col) = edit_line_col(buf, cursor);
+    if line == 0 { return 0; }
+    edit_pos_from_line_col(buf, line - 1, col)
+}
+
+/// Move o cursor uma linha abaixo, mantendo a coluna.
+fn edit_cursor_down(buf: &str, cursor: usize) -> usize {
+    let starts = edit_line_starts(buf);
+    let (line, col) = edit_line_col(buf, cursor);
+    if line + 1 >= starts.len() { return buf.chars().count(); }
+    edit_pos_from_line_col(buf, line + 1, col)
+}
+
+/// Início da linha atual.
+fn edit_line_start(buf: &str, cursor: usize) -> usize {
+    let (line, _) = edit_line_col(buf, cursor);
+    edit_line_starts(buf).get(line).copied().unwrap_or(0)
+}
+
+/// Final da linha atual (antes do separador \n ou fim do buffer).
+fn edit_line_end(buf: &str, cursor: usize) -> usize {
+    let starts = edit_line_starts(buf);
+    let (line, _) = edit_line_col(buf, cursor);
+    let total = buf.chars().count();
+    if line + 1 < starts.len() {
+        starts[line + 1].saturating_sub(2)
+    } else {
+        total
     }
 }

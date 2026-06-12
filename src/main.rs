@@ -225,6 +225,13 @@ enum ConfigAction {
     },
     /// Lista os padrões de privacidade ativos
     ListBlocks,
+    /// Define um prompt customizado para o LLM. Use {context} para os dados e {lang} para o idioma.
+    SetPrompt {
+        /// Template do prompt. Ex: "Analise as atividades. {lang}\n\n{context}\n\nFoque em produtividade."
+        template: String,
+    },
+    /// Remove o prompt customizado (volta ao padrão)
+    ClearPrompt,
     /// Mostra a configuração atual
     Show,
 }
@@ -402,6 +409,7 @@ async fn main() -> Result<()> {
                 notion: notion.as_ref().map(|(t, p)| (t.as_str(), p.as_str())),
                 slack: slack.as_deref(),
                 search: search.as_deref(),
+                custom_prompt: cfg.custom_prompt.as_deref(),
             })
             .await?;
         }
@@ -503,6 +511,20 @@ async fn main() -> Result<()> {
                         println!("  - {p}");
                     }
                 }
+            }
+            ConfigAction::SetPrompt { template } => {
+                cfg.custom_prompt = Some(template.clone());
+                cfg.save()?;
+                println!("Prompt customizado salvo.");
+                println!("  Placeholders disponíveis: {{context}}, {{lang}}");
+                if !template.contains("{context}") {
+                    println!("  Aviso: {{context}} não encontrado — dados serão anexados ao final.");
+                }
+            }
+            ConfigAction::ClearPrompt => {
+                cfg.custom_prompt = None;
+                cfg.save()?;
+                println!("Prompt customizado removido. Usando o prompt padrão.");
             }
             ConfigAction::Show => {
                 println!("{}", cfg.display());
