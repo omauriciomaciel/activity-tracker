@@ -24,6 +24,10 @@ pub struct Config {
     /// termos (case-insensitive) são removidos dos logs antes de salvar.
     #[serde(default)]
     pub blocked_patterns: Vec<String>,
+    /// Pastas (prefixos de caminho) a ignorar nos logs de git.
+    /// Ex: ["/home/user/pessoal", "/home/user/cliente-x"]
+    #[serde(default)]
+    pub ignored_git_paths: Vec<String>,
     /// Prompt customizado enviado ao LLM. Use {context} para injetar os dados coletados
     /// e {lang} para injetar a instrução de idioma. Se {context} for omitido, os dados
     /// são anexados automaticamente ao final.
@@ -48,6 +52,7 @@ impl Default for Config {
             machine_name: None,
             slack_webhook: None,
             blocked_patterns: Vec::new(),
+            ignored_git_paths: Vec::new(),
             custom_prompt: None,
         }
     }
@@ -118,6 +123,15 @@ impl Config {
                 self.blocked_patterns.join(", ")
             )
         };
+        let ignored_git_line = if self.ignored_git_paths.is_empty() {
+            "  git ignore: nenhum".to_string()
+        } else {
+            format!(
+                "  git ignore: {} pasta(s): {}",
+                self.ignored_git_paths.len(),
+                self.ignored_git_paths.join(", ")
+            )
+        };
         let prompt_line = match &self.custom_prompt {
             Some(p) => {
                 let preview = if p.len() > 60 {
@@ -130,7 +144,7 @@ impl Config {
             None => "  prompt:     padrão".to_string(),
         };
         format!(
-            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n{}\n  máquina:    {}\n  notion:     {}\n  slack:      {}\n{}\n  logs:       {}\n  config:     {}",
+            "Configuração atual ({}):\n\n  provider:   {}\n  modelo:     {}\n{}\n  idioma:     {}\n{}\n  máquina:    {}\n  notion:     {}\n  slack:      {}\n{}\n{}\n  logs:       {}\n  config:     {}",
             config_path().display(),
             self.provider,
             self.model,
@@ -149,6 +163,7 @@ impl Config {
                 "não configurado"
             },
             blocked_line,
+            ignored_git_line,
             log_dir().display(),
             config_path().display(),
         )

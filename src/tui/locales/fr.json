@@ -46,6 +46,8 @@
   "field.name": "nom",
   "not_configured": "non configuré",
   "add_pattern": "+ ajouter un filtre…",
+  "section.git_ignore": "GIT IGNORER",
+  "add_git_path": "+ ajouter un dossier…",
   "delete_hint": "  d supprimer",
   "prompt.editing_hint": "   [Enter = confirmer  •  \\n = saut de ligne  •  Esc = annuler]",
   "prompt.browse_hint": "   [Enter pour éditer  •  \\n = saut de ligne]"

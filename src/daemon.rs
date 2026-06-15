@@ -125,11 +125,11 @@ pub fn status() -> Result<()> {
 
 async fn do_collect(log_dir: std::path::PathBuf) {
     let now = chrono::Local::now().format("%H:%M:%S").to_string();
-    let blocked = config::Config::load()
-        .map(|c| c.blocked_patterns)
+    let (blocked, ignored_git_paths) = config::Config::load()
+        .map(|c| (c.blocked_patterns, c.ignored_git_paths))
         .unwrap_or_default();
     let result =
-        tokio::task::spawn_blocking(move || collector::collect_all(&log_dir, &blocked)).await;
+        tokio::task::spawn_blocking(move || collector::collect_all(&log_dir, &blocked, &ignored_git_paths)).await;
     match result {
         Ok(Ok(n)) => eprintln!("[{now}] {n} entradas coletadas"),
         Ok(Err(e)) => eprintln!("[{now}] Erro na coleta: {e}"),

@@ -18,6 +18,7 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
     let ui = Ui::new(&app.config.lang);
     let cfg = &app.config;
     let cur = app.config_cursor;
+    let cf_add_git = app.cf_add_git_path();
     let edit_buf: Option<(&str, usize)> = match &app.config_edit {
         ConfigEditMode::Editing(b, cur) => Some((b.as_str(), *cur)),
         ConfigEditMode::Browse => None,
@@ -329,6 +330,83 @@ pub(super) fn render_config(f: &mut Frame, app: &mut App, area: Rect) {
         };
         push!(Line::from(vec![prefix, val_span, del_hint]), idx);
     }
+    push!(Line::from(""), usize::MAX);
+
+    // ── GIT IGNORAR ───────────────────────────────────────────────────────────
+    push!(section_line(ui.t("section.git_ignore")), usize::MAX);
+    push!(sep_line(), usize::MAX);
+
+    let add_git_selected = cur == cf_add_git;
+    let add_git_editing = add_git_selected && edit_buf.is_some();
+    let add_git_prefix = if add_git_selected {
+        Span::styled(" > ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+    } else {
+        Span::raw("   ")
+    };
+    let add_git_val = if add_git_editing {
+        let (buf, c) = edit_buf.unwrap_or(("", 0));
+        Span::styled(
+            edit_render_cursor(buf, c),
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(
+            ui.t("add_git_path"),
+            if add_git_selected {
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            },
+        )
+    };
+    push!(Line::from(vec![add_git_prefix, add_git_val]), cf_add_git);
+
+    for (i, path) in cfg.ignored_git_paths.iter().enumerate() {
+        let idx = cf_add_git + 1 + i;
+        let sel = cur == idx;
+        let ed = sel && edit_buf.is_some();
+        let prefix = if sel {
+            Span::styled(" > ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        } else {
+            Span::raw("   ")
+        };
+        let val_span = if ed {
+            let (buf, c) = edit_buf.unwrap_or(("", 0));
+            Span::styled(
+                edit_render_cursor(buf, c),
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled(
+                format!("- {path}"),
+                if sel {
+                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Magenta)
+                },
+            )
+        };
+        let del_hint = if sel && !ed {
+            Span::styled(ui.t("delete_hint"), Style::default().fg(Color::DarkGray))
+        } else {
+            Span::raw("")
+        };
+        push!(Line::from(vec![prefix, val_span, del_hint]), idx);
+    }
+    push!(Line::from(""), usize::MAX);
+
+    // ── Status / ações ────────────────────────────────────────────────────────
+    if let Some(status) = &app.config_status {
+        push!(Line::from(Span::styled(
+            format!("  ✓ {status}"),
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+        )), usize::MAX);
+        push!(Line::from(""), usize::MAX);
+    }
+    push!(Line::from(Span::styled(
+        "  P  purge git logs  |  R  reload",
+        Style::default().fg(Color::DarkGray),
+    )), usize::MAX);
     push!(Line::from(""), usize::MAX);
 
     // ── PATHS (read-only) ─────────────────────────────────────────────────────

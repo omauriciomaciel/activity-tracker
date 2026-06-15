@@ -263,7 +263,7 @@ async fn main() -> Result<()> {
 
         Commands::Collect => {
             let log_dir = config::log_dir();
-            let entry_count = collector::collect_all(&log_dir, &cfg.blocked_patterns)?;
+            let entry_count = collector::collect_all(&log_dir, &cfg.blocked_patterns, &cfg.ignored_git_paths)?;
             println!("Coleta concluída — {entry_count} entradas salvas");
         }
 
@@ -314,7 +314,8 @@ async fn main() -> Result<()> {
         Commands::CleanLogs => {
             let log_dir = config::log_dir();
             let removed = collector::clean_all_logs(&log_dir)?;
-            println!("Logs limpos — {removed} entradas removidas");
+            let purged = collector::purge_ignored_git_repos(&log_dir, &cfg.ignored_git_paths)?;
+            println!("Logs limpos — {removed} entradas de data removidas, {purged} repos git ignorados removidos");
         }
 
         Commands::Update => {

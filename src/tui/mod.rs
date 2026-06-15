@@ -92,6 +92,7 @@ pub(super) struct App {
     pub config_cursor: usize,
     pub config_edit: ConfigEditMode,
     pub config_row_map: Vec<usize>,
+    pub config_status: Option<String>,
     pub last_size: Rect,
 }
 
@@ -116,6 +117,7 @@ impl App {
             config_cursor: 0,
             config_edit: ConfigEditMode::Browse,
             config_row_map: Vec::new(),
+            config_status: None,
             last_size: Rect::default(),
         }
     }
@@ -129,8 +131,12 @@ impl App {
         self.config_edit = ConfigEditMode::Browse;
     }
 
-    pub fn config_item_count(&self) -> usize {
+    pub fn cf_add_git_path(&self) -> usize {
         CF_ADD_BLOCK + 1 + self.config.blocked_patterns.len()
+    }
+
+    pub fn config_item_count(&self) -> usize {
+        self.cf_add_git_path() + 1 + self.config.ignored_git_paths.len()
     }
 
     pub fn load_data(&mut self) {
@@ -257,11 +263,15 @@ async fn event_loop(
                                 let old =
                                     std::mem::replace(&mut app.config_edit, ConfigEditMode::Browse);
                                 if let ConfigEditMode::Editing(buf, _) = old {
-                                    config::cfg_apply(&mut app.config, app.config_cursor, buf);
+                                    let cf_add_git = app.cf_add_git_path();
+                                    config::cfg_apply(&mut app.config, app.config_cursor, buf, cf_add_git);
                                     let _ = app.config.save();
                                     if app.config_cursor == CF_ADD_BLOCK {
                                         app.config_cursor =
                                             CF_ADD_BLOCK + app.config.blocked_patterns.len();
+                                    } else if app.config_cursor == cf_add_git {
+                                        app.config_cursor =
+                                            app.cf_add_git_path() + app.config.ignored_git_paths.len();
                                     }
                                 }
                             }
@@ -372,25 +382,48 @@ async fn event_loop(
                             }
                         }
                         KeyCode::Enter | KeyCode::Char('e') => {
-                            if let Some(val) = config::cfg_initial_value(&app.config, app.config_cursor) {
+                            let cf_add_git = app.cf_add_git_path();
+                            if let Some(val) = config::cfg_initial_value(&app.config, app.config_cursor, cf_add_git) {
                                 let end = val.chars().count();
                                 app.config_edit = ConfigEditMode::Editing(val, end);
                             }
                         }
                         KeyCode::Char('d') | KeyCode::Delete => {
-                            let idx = app.config_cursor.saturating_sub(CF_ADD_BLOCK + 1);
-                            if app.config_cursor > CF_ADD_BLOCK
-                                && idx < app.config.blocked_patterns.len()
-                            {
-                                app.config.blocked_patterns.remove(idx);
-                                let _ = app.config.save();
-                                let new_total = app.config_item_count();
-                                if app.config_cursor >= new_total {
-                                    app.config_cursor = new_total.saturating_sub(1);
+                            let cf_add_git = app.cf_add_git_path();
+                            if app.config_cursor > CF_ADD_BLOCK && app.config_cursor < cf_add_git {
+                                let idx = app.config_cursor - CF_ADD_BLOCK - 1;
+                                if idx < app.config.blocked_patterns.len() {
+                                    app.config.blocked_patterns.remove(idx);
+                                    let _ = app.config.save();
+                                    let new_total = app.config_item_count();
+                                    if app.config_cursor >= new_total {
+                                        app.config_cursor = new_total.saturating_sub(1);
+                                    }
+                                }
+                            } else if app.config_cursor > cf_add_git {
+                                let idx = app.config_cursor - cf_add_git - 1;
+                                if idx < app.config.ignored_git_paths.len() {
+                                    app.config.ignored_git_paths.remove(idx);
+                                    let _ = app.config.save();
+                                    let new_total = app.config_item_count();
+                                    if app.config_cursor >= new_total {
+                                        app.config_cursor = new_total.saturating_sub(1);
+                                    }
                                 }
                             }
                         }
-                        KeyCode::Char('R') => app.reload_config(),
+                        KeyCode::Char('P') => {
+                            let log_dir = crate::config::log_dir();
+                            let ignored = app.config.ignored_git_paths.clone();
+                            match crate::collector::purge_ignored_git_repos(&log_dir, &ignored) {
+                                Ok(n) => app.config_status = Some(format!("{n} repos git removidos dos logs")),
+                                Err(e) => app.config_status = Some(format!("Erro: {e}")),
+                            }
+                        }
+                        KeyCode::Char('R') => {
+                            app.reload_config();
+                            app.config_status = None;
+                        }
                         _ => {}
                     }
                     continue;

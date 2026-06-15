@@ -46,6 +46,8 @@
   "field.name": "名称",
   "not_configured": "未配置",
   "add_pattern": "+ 添加规则…",
+  "section.git_ignore": "Git 忽略路径",
+  "add_git_path": "+ 添加文件夹…",
   "delete_hint": "  d 删除",
   "prompt.editing_hint": "   [Enter = 确认  •  \\n = 换行  •  Esc = 取消]",
   "prompt.browse_hint": "   [Enter 编辑  •  \\n = 换行]"

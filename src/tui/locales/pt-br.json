@@ -46,6 +46,8 @@
   "field.name": "nome",
   "not_configured": "não configurado",
   "add_pattern": "+ adicionar padrão…",
+  "section.git_ignore": "GIT IGNORAR",
+  "add_git_path": "+ adicionar pasta…",
   "delete_hint": "  d deletar",
   "prompt.editing_hint": "   [Enter = confirma  •  \\n = quebra de linha  •  Esc = cancela]",
   "prompt.browse_hint": "   [Enter para editar  •  \\n = quebra de linha]"

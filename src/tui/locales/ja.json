@@ -46,6 +46,8 @@
   "field.name": "名前",
   "not_configured": "未設定",
   "add_pattern": "+ パターンを追加…",
+  "section.git_ignore": "Git 除外パス",
+  "add_git_path": "+ フォルダを追加…",
   "delete_hint": "  d 削除",
   "prompt.editing_hint": "   [Enter = 確定  •  \\n = 改行  •  Esc = キャンセル]",
   "prompt.browse_hint": "   [Enter で編集  •  \\n = 改行]"

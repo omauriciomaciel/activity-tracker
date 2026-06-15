@@ -50,7 +50,7 @@ pub struct GitRepoInfo {
 
 /// Executa todas as coletas e salva no arquivo JSONL do dia.
 /// Retorna o número de entradas salvas.
-pub fn collect_all(log_dir: &Path, blocked: &[String]) -> Result<usize> {
+pub fn collect_all(log_dir: &Path, blocked: &[String], ignored_git_paths: &[String]) -> Result<usize> {
     std::fs::create_dir_all(log_dir)?;
 
     let date = Local::now().format("%Y-%m-%d").to_string();
@@ -78,7 +78,7 @@ pub fn collect_all(log_dir: &Path, blocked: &[String]) -> Result<usize> {
     }
 
     // Git context
-    match capture_git_context(&ts) {
+    match capture_git_context(&ts, ignored_git_paths) {
         Ok(e) => entries.push(e),
         Err(err) => eprintln!("Aviso:git context: {err}"),
     }
@@ -532,7 +532,7 @@ fn read_chrome_history_db() -> Result<Vec<TabInfo>> {
 
 // ─── 4. Git context ─────────────────────────────
 
-fn capture_git_context(ts: &str) -> Result<Entry> {
+fn capture_git_context(ts: &str, ignored_git_paths: &[String]) -> Result<Entry> {
     let home = home_dir();
     let today = Local::now().date_naive();
     let mut repos: Vec<GitRepoInfo> = Vec::new();
@@ -557,6 +557,13 @@ fn capture_git_context(ts: &str) -> Result<Entry> {
 
             // Reject paths outside $HOME (symlink escape guard)
             if !std::path::Path::new(repo_dir).starts_with(&home) {
+                continue;
+            }
+
+            // Ignorar pastas configuradas
+            if ignored_git_paths.iter().any(|ig| {
+                std::path::Path::new(repo_dir).starts_with(ig.trim_end_matches('/'))
+            }) {
                 continue;
             }
 
@@ -624,6 +631,76 @@ pub fn clean_all_logs(log_dir: &Path) -> Result<usize> {
     }
 
     Ok(total_removed)
+}
+
+/// Remove de todos os arquivos JSONL as entradas de git_repos cujo caminho
+/// começa com qualquer um dos prefixos em `ignored_git_paths`.
+pub fn purge_ignored_git_repos(log_dir: &Path, ignored_git_paths: &[String]) -> Result<usize> {
+    if ignored_git_paths.is_empty() {
+        return Ok(0);
+    }
+    let mut total_removed = 0;
+
+    let entries = match std::fs::read_dir(log_dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(0),
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        total_removed += purge_git_repos_in_file(&path, ignored_git_paths)?;
+    }
+
+    Ok(total_removed)
+}
+
+fn purge_git_repos_in_file(path: &Path, ignored_git_paths: &[String]) -> Result<usize> {
+    let content = std::fs::read_to_string(path)?;
+    let mut out_lines: Vec<String> = Vec::new();
+    let mut removed = 0;
+
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let mut val: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => {
+                out_lines.push(line.to_string());
+                continue;
+            }
+        };
+
+        if val.get("type").and_then(|t| t.as_str()) == Some("context") {
+            if let Some(repos) = val["data"]["git_repos"].as_array().cloned() {
+                let before = repos.len();
+                let kept: Vec<serde_json::Value> = repos
+                    .into_iter()
+                    .filter(|r| {
+                        let repo_path = r["repo"].as_str().unwrap_or("");
+                        !ignored_git_paths.iter().any(|ig| {
+                            std::path::Path::new(repo_path)
+                                .starts_with(ig.trim_end_matches('/'))
+                        })
+                    })
+                    .collect();
+                removed += before.saturating_sub(kept.len());
+                if kept.is_empty() {
+                    continue;
+                }
+                val["data"]["git_repos"] = serde_json::json!(kept);
+            }
+        }
+
+        out_lines.push(serde_json::to_string(&val)?);
+    }
+
+    let new_content = out_lines.join("\n") + if out_lines.is_empty() { "" } else { "\n" };
+    std::fs::write(path, new_content)?;
+    Ok(removed)
 }
 
 fn clean_log_file(path: &Path, date: NaiveDate) -> Result<usize> {

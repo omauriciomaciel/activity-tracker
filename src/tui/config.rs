@@ -15,7 +15,7 @@ pub(super) fn cfg_cycle(current: &mut String, options: &[&str], dir: i32) {
     *current = options[new_pos].to_string();
 }
 
-pub(super) fn cfg_initial_value(cfg: &Config, cursor: usize) -> Option<String> {
+pub(super) fn cfg_initial_value(cfg: &Config, cursor: usize, cf_add_git_path: usize) -> Option<String> {
     match cursor {
         CF_MODEL => Some(cfg.model.clone()),
         CF_URL_OR_KEY => Some(if cfg.provider == "ollama" {
@@ -33,12 +33,18 @@ pub(super) fn cfg_initial_value(cfg: &Config, cursor: usize) -> Option<String> {
         CF_NOTION_PAGE => Some(cfg.notion_page_id.clone().unwrap_or_default()),
         CF_SLACK => Some(cfg.slack_webhook.clone().unwrap_or_default()),
         CF_ADD_BLOCK => Some(String::new()),
-        c if c > CF_ADD_BLOCK => cfg.blocked_patterns.get(c - CF_ADD_BLOCK - 1).cloned(),
+        c if c > CF_ADD_BLOCK && c < cf_add_git_path => {
+            cfg.blocked_patterns.get(c - CF_ADD_BLOCK - 1).cloned()
+        }
+        c if c == cf_add_git_path => Some(String::new()),
+        c if c > cf_add_git_path => {
+            cfg.ignored_git_paths.get(c - cf_add_git_path - 1).cloned()
+        }
         _ => None,
     }
 }
 
-pub(super) fn cfg_apply(cfg: &mut Config, cursor: usize, value: String) {
+pub(super) fn cfg_apply(cfg: &mut Config, cursor: usize, value: String, cf_add_git_path: usize) {
     let v = value.trim().to_string();
     match cursor {
         CF_MODEL => cfg.model = v,
@@ -59,13 +65,28 @@ pub(super) fn cfg_apply(cfg: &mut Config, cursor: usize, value: String) {
                 cfg.blocked_patterns.push(v);
             }
         }
-        c if c > CF_ADD_BLOCK => {
+        c if c > CF_ADD_BLOCK && c < cf_add_git_path => {
             let idx = c - CF_ADD_BLOCK - 1;
             if idx < cfg.blocked_patterns.len() {
                 if v.is_empty() {
                     cfg.blocked_patterns.remove(idx);
                 } else {
                     cfg.blocked_patterns[idx] = v;
+                }
+            }
+        }
+        c if c == cf_add_git_path => {
+            if !v.is_empty() {
+                cfg.ignored_git_paths.push(v);
+            }
+        }
+        c if c > cf_add_git_path => {
+            let idx = c - cf_add_git_path - 1;
+            if idx < cfg.ignored_git_paths.len() {
+                if v.is_empty() {
+                    cfg.ignored_git_paths.remove(idx);
+                } else {
+                    cfg.ignored_git_paths[idx] = v;
                 }
             }
         }
