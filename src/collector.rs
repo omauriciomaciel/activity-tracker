@@ -291,8 +291,57 @@ fn read_incremental(file: &Path, marker: &Path, max: usize) -> Result<Vec<String
 
 // ─── 2. Janelas abertas ─────────────────────────
 
+fn is_wsl() -> bool {
+    std::fs::read_to_string("/proc/version")
+        .map(|v| {
+            let lower = v.to_lowercase();
+            lower.contains("microsoft") || lower.contains("wsl")
+        })
+        .unwrap_or(false)
+}
+
 fn capture_open_windows(ts: &str, blocked: &[String]) -> Result<Entry> {
     let mut windows: Vec<String> = Vec::new();
+
+    // WSL: usar PowerShell interop para enxergar janelas do Windows
+    if windows.is_empty() && is_wsl() {
+        let ps_script = r#"
+$ErrorActionPreference = 'SilentlyContinue'
+Get-Process | Where-Object { $_.MainWindowTitle -ne '' } |
+    Select-Object Name, MainWindowTitle |
+    ConvertTo-Json -Compress
+"#;
+        if let Ok(out) = Command::new("powershell.exe")
+            .args(["-WindowStyle", "Hidden", "-NonInteractive", "-Command", ps_script])
+            .output()
+            && out.status.success()
+        {
+            let text = String::from_utf8_lossy(&out.stdout);
+            let text = text.trim();
+            if !text.is_empty() {
+                // ConvertTo-Json retorna objeto único quando há 1 item, array quando há vários
+                let value: serde_json::Value = serde_json::from_str(text).unwrap_or_default();
+                let items = if value.is_array() {
+                    value.as_array().cloned().unwrap_or_default()
+                } else if value.is_object() {
+                    vec![value]
+                } else {
+                    vec![]
+                };
+                for item in items {
+                    let title = item
+                        .get("MainWindowTitle")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .trim()
+                        .to_string();
+                    if !title.is_empty() && !is_blocked(&title, blocked) {
+                        windows.push(title);
+                    }
+                }
+            }
+        }
+    }
 
     // Tentar wmctrl (X11)
     if let Ok(out) = Command::new("wmctrl").args(["-l"]).output()
