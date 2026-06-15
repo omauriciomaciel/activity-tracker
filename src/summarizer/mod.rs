@@ -272,8 +272,8 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
 }
 
 fn parse_date(s: &str) -> Result<chrono::NaiveDate> {
-    chrono::NaiveDate::parse_from_str(s, "%Y-%d-%m")
-        .with_context(|| format!("Data inválida: '{s}'. Use o formato YYYY-DD-MM (ex: 2026-08-06)"))
+    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .with_context(|| format!("Data inválida: '{s}'. Use o formato YYYY-MM-DD (ex: 2026-08-06)"))
 }
 
 fn find_log_files(log_dir: &std::path::Path, days: u32) -> Vec<PathBuf> {

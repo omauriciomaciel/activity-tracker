@@ -272,8 +272,8 @@ async fn main() -> Result<()> {
 
             let target_date = if let Some(ref raw) = date {
                 Some(
-                    chrono::NaiveDate::parse_from_str(raw, "%Y-%d-%m")
-                        .with_context(|| format!("Data inválida: '{raw}'. Use YYYY-DD-MM (ex: 2026-08-06)"))?,
+                    chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+                        .with_context(|| format!("Data inválida: '{raw}'. Use YYYY-MM-DD (ex: 2026-08-06)"))?,
                 )
             } else {
                 None
