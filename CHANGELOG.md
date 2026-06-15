@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.11.1 (2026-06-15)
+
+### Bug Fixes
+
+- **date**: Corrige formato de data para ISO 8601
+  ([`6632d56`](https://github.com/omauriciomaciel/activity-tracker/commit/6632d560c42aa11139491498492812079b55f13c))
+
+
 ## v1.11.0 (2026-06-12)
 
 ### Chores

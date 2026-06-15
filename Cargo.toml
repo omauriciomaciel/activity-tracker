@@ -1,6 +1,6 @@
 [package]
 name = "activity-tracker"
-version = "1.11.0"
+version = "1.11.1"
 edition = "2024"
 description = "Captura atividades do sistema e resume com Ollama"
 repository = "https://github.com/omauriciomaciel/activity-tracker"
