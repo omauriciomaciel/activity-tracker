@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.12.0 (2026-06-15)
+
+### Features
+
+- **collector**: Adiciona suporte a janelas no WSL
+  ([`6534868`](https://github.com/omauriciomaciel/activity-tracker/commit/653486853c4fad9ff9558069ca8f0b1e1aaf6ec1))
+
+- **collector**: Adiciona suporte para ignorar caminhos de repositórios git
+  ([`9599775`](https://github.com/omauriciomaciel/activity-tracker/commit/95997756937ffefa20c21f69020bc8259ca97d99))
+
+
 ## v1.11.1 (2026-06-15)
 
 ### Bug Fixes
