@@ -50,7 +50,11 @@ pub struct GitRepoInfo {
 
 /// Executa todas as coletas e salva no arquivo JSONL do dia.
 /// Retorna o número de entradas salvas.
-pub fn collect_all(log_dir: &Path, blocked: &[String], ignored_git_paths: &[String]) -> Result<usize> {
+pub fn collect_all(
+    log_dir: &Path,
+    blocked: &[String],
+    ignored_git_paths: &[String],
+) -> Result<usize> {
     std::fs::create_dir_all(log_dir)?;
 
     let date = Local::now().format("%Y-%m-%d").to_string();
@@ -312,7 +316,13 @@ Get-Process | Where-Object { $_.MainWindowTitle -ne '' } |
     ConvertTo-Json -Compress
 "#;
         if let Ok(out) = Command::new("powershell.exe")
-            .args(["-WindowStyle", "Hidden", "-NonInteractive", "-Command", ps_script])
+            .args([
+                "-WindowStyle",
+                "Hidden",
+                "-NonInteractive",
+                "-Command",
+                ps_script,
+            ])
             .output()
             && out.status.success()
         {
@@ -610,9 +620,10 @@ fn capture_git_context(ts: &str, ignored_git_paths: &[String]) -> Result<Entry> 
             }
 
             // Ignorar pastas configuradas
-            if ignored_git_paths.iter().any(|ig| {
-                std::path::Path::new(repo_dir).starts_with(ig.trim_end_matches('/'))
-            }) {
+            if ignored_git_paths
+                .iter()
+                .any(|ig| std::path::Path::new(repo_dir).starts_with(ig.trim_end_matches('/')))
+            {
                 continue;
             }
 
@@ -731,8 +742,7 @@ fn purge_git_repos_in_file(path: &Path, ignored_git_paths: &[String]) -> Result<
                     .filter(|r| {
                         let repo_path = r["repo"].as_str().unwrap_or("");
                         !ignored_git_paths.iter().any(|ig| {
-                            std::path::Path::new(repo_path)
-                                .starts_with(ig.trim_end_matches('/'))
+                            std::path::Path::new(repo_path).starts_with(ig.trim_end_matches('/'))
                         })
                     })
                     .collect();

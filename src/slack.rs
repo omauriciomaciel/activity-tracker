@@ -43,17 +43,7 @@ pub async fn send_message(webhook_url: &str, title: &str, body: &str) -> Result<
 
 // Convert **bold** → *bold*  (Slack mrkdwn uses single asterisks)
 fn md_to_mrkdwn(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '*' && chars.peek() == Some(&'*') {
-            chars.next(); // consume second *
-            out.push('*');
-        } else {
-            out.push(c);
-        }
-    }
-    out
+    text.replace("**", "*")
 }
 
 fn char_boundary_at(s: &str, max_bytes: usize) -> usize {

@@ -78,7 +78,11 @@ fn markdown_to_blocks(text: &str) -> Vec<Value> {
         // Opening fence: ``` or ```lang or ~~~
         if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
             flush_into(&mut blocks, &mut para_lines);
-            let lang = trimmed.trim_start_matches('`').trim_start_matches('~').trim().to_string();
+            let lang = trimmed
+                .trim_start_matches('`')
+                .trim_start_matches('~')
+                .trim()
+                .to_string();
             code_fence = Some(lang);
             continue;
         }
@@ -131,22 +135,8 @@ fn markdown_to_blocks(text: &str) -> Vec<Value> {
             continue;
         }
 
-        // Indented sub-bullet (2+ spaces before - or *)
-        if let Some(rest) = try_indented_bullet(line) {
-            flush_into(&mut blocks, &mut para_lines);
-            blocks.push(json!({
-                "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": parse_inline(rest),
-                    "color": "default"
-                }
-            }));
-            continue;
-        }
-
-        // Bullet item: * text / - text / *   text (Ollama uses "* " and "*   ")
-        if let Some(rest) = try_bullet(trimmed) {
+        // Bullet item: * text / - text / *   text / indented sub-bullet
+        if let Some(rest) = try_bullet_line(line) {
             flush_into(&mut blocks, &mut para_lines);
             blocks.push(json!({
                 "object": "block",
@@ -182,27 +172,10 @@ fn try_bold_heading(line: &str) -> Option<&str> {
     Some(inner)
 }
 
-fn try_indented_bullet(line: &str) -> Option<&str> {
-    // Requires at least 2 leading spaces before - or *
-    if line.len() < 3 {
-        return None;
-    }
+fn try_bullet_line(line: &str) -> Option<&str> {
     let stripped = line.trim_start();
-    let indent = line.len() - stripped.len();
-    if indent < 2 {
-        return None;
-    }
-    for prefix in &["- ", "* "] {
-        if let Some(rest) = stripped.strip_prefix(prefix) {
-            return Some(rest.trim_start());
-        }
-    }
-    None
-}
-
-fn try_bullet(line: &str) -> Option<&str> {
     for prefix in &["*   ", "*  ", "* ", "- ", "•  ", "•"] {
-        if let Some(rest) = line.strip_prefix(prefix) {
+        if let Some(rest) = stripped.strip_prefix(prefix) {
             return Some(rest.trim_start());
         }
     }

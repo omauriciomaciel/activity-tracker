@@ -4,10 +4,7 @@ use tokio::signal;
 use tokio::time::{self, Duration};
 
 pub fn pid_file() -> std::path::PathBuf {
-    dirs::data_local_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("activity-tracker")
-        .join("daemon.pid")
+    crate::config::data_dir().join("daemon.pid")
 }
 
 pub async fn run(interval_min: u64, foreground: bool) -> Result<()> {
@@ -128,8 +125,10 @@ async fn do_collect(log_dir: std::path::PathBuf) {
     let (blocked, ignored_git_paths) = config::Config::load()
         .map(|c| (c.blocked_patterns, c.ignored_git_paths))
         .unwrap_or_default();
-    let result =
-        tokio::task::spawn_blocking(move || collector::collect_all(&log_dir, &blocked, &ignored_git_paths)).await;
+    let result = tokio::task::spawn_blocking(move || {
+        collector::collect_all(&log_dir, &blocked, &ignored_git_paths)
+    })
+    .await;
     match result {
         Ok(Ok(n)) => eprintln!("[{now}] {n} entradas coletadas"),
         Ok(Err(e)) => eprintln!("[{now}] Erro na coleta: {e}"),

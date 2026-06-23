@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 use serde::Deserialize;
+use std::io::BufRead;
 use std::path::PathBuf;
 use termimad::MadSkin;
 
@@ -10,7 +11,7 @@ mod llm;
 
 pub use aggregate::{ActivityData, build_context, load_for_date};
 pub use export::export_cmd;
-pub use llm::{call_llm, DEFAULT_PROMPT_TEMPLATE};
+pub use llm::{DEFAULT_PROMPT_TEMPLATE, call_llm};
 
 use crate::config;
 
@@ -18,7 +19,7 @@ use crate::config;
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
-pub(super) enum LogEntry {
+pub(crate) enum LogEntry {
     #[serde(rename = "shell")]
     Shell { commands: Vec<String> },
     #[serde(rename = "apps")]
@@ -32,7 +33,7 @@ pub(super) enum LogEntry {
 }
 
 #[derive(Deserialize)]
-pub(super) struct TabEntry {
+pub(crate) struct TabEntry {
     #[serde(default)]
     pub title: String,
     #[serde(default)]
@@ -40,13 +41,13 @@ pub(super) struct TabEntry {
 }
 
 #[derive(Deserialize)]
-pub(super) struct CtxData {
+pub(crate) struct CtxData {
     #[serde(default)]
     pub git_repos: Vec<GitEntry>,
 }
 
 #[derive(Deserialize)]
-pub(super) struct GitEntry {
+pub(crate) struct GitEntry {
     pub repo: String,
     #[serde(default)]
     pub commits: Vec<String>,
@@ -54,7 +55,7 @@ pub(super) struct GitEntry {
     pub last_commit: String,
 }
 
-pub(super) fn is_noise_command(cmd: &str) -> bool {
+pub(crate) fn is_noise_command(cmd: &str) -> bool {
     let t = cmd.trim();
     let inner = t.strip_prefix('#').unwrap_or(t);
     if inner.chars().all(|c| c.is_ascii_digit()) && !inner.is_empty() {
@@ -67,7 +68,7 @@ pub(super) fn is_noise_command(cmd: &str) -> bool {
     )
 }
 
-pub(super) fn strip_hostname_prefix(s: &str) -> &str {
+pub(crate) fn strip_hostname_prefix(s: &str) -> &str {
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'-') {
@@ -78,6 +79,18 @@ pub(super) fn strip_hostname_prefix(s: &str) -> &str {
     } else {
         s
     }
+}
+
+pub(crate) fn read_log_entries(path: &std::path::Path) -> Vec<LogEntry> {
+    let Ok(f) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
+    std::io::BufReader::new(f)
+        .lines()
+        .map_while(Result::ok)
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str::<LogEntry>(&l).ok())
+        .collect()
 }
 
 // ─── RunOptions e orquestração principal ─────────────────────────────────────
@@ -188,8 +201,16 @@ pub async fn run(opts: RunOptions<'_>) -> Result<()> {
         "{}",
         format!("Enviando para {provider} (modelo: {model})...").dimmed()
     );
-    let summary =
-        llm::call_llm(provider, ollama_url, api_key, model, &context, lang, custom_prompt).await?;
+    let summary = llm::call_llm(
+        provider,
+        ollama_url,
+        api_key,
+        model,
+        &context,
+        lang,
+        custom_prompt,
+    )
+    .await?;
 
     let border = "━".repeat(47);
 

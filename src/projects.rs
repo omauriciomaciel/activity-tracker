@@ -1,7 +1,7 @@
 use anyhow::Result;
-use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use std::io::BufRead;
+
+use crate::summarizer::{LogEntry, read_log_entries};
 
 pub struct ProjectStat {
     pub name: String,
@@ -9,28 +9,6 @@ pub struct ProjectStat {
     pub commits: usize,
     pub days_active: usize,
     pub pct: f64,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type")]
-enum LogEntry {
-    #[serde(rename = "context")]
-    Context { data: CtxData },
-}
-
-#[derive(Deserialize)]
-struct CtxData {
-    #[serde(default)]
-    git_repos: Vec<GitEntry>,
-}
-
-#[derive(Deserialize)]
-struct GitEntry {
-    repo: String,
-    #[serde(default)]
-    commits: Vec<String>,
-    #[serde(default)]
-    last_commit: String,
 }
 
 pub fn load_stats(days: u32) -> Result<Vec<ProjectStat>> {
@@ -43,22 +21,10 @@ pub fn load_stats(days: u32) -> Result<Vec<ProjectStat>> {
     for d in 0..days {
         let date = today - chrono::Duration::days(d as i64);
         let path = log_dir.join(format!("{}.jsonl", date.format("%Y-%m-%d")));
-        if !path.exists() {
-            continue;
-        }
 
         let mut day_repos: HashSet<String> = HashSet::new();
-        let f = match std::fs::File::open(&path) {
-            Ok(f) => f,
-            Err(_) => continue,
-        };
-
-        for line in std::io::BufReader::new(f)
-            .lines()
-            .map_while(Result::ok)
-            .filter(|l| !l.trim().is_empty())
-        {
-            if let Ok(LogEntry::Context { data }) = serde_json::from_str(&line) {
+        for entry in read_log_entries(&path) {
+            if let LogEntry::Context { data } = entry {
                 for r in data.git_repos {
                     let commits: Vec<String> = if !r.commits.is_empty() {
                         r.commits

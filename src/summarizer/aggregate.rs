@@ -1,11 +1,10 @@
 use anyhow::Result;
 use colored::Colorize;
 use std::collections::{HashMap, HashSet};
-use std::io::BufRead;
 use std::path::PathBuf;
 
-use crate::config;
 use super::{LogEntry, is_noise_command, strip_hostname_prefix};
+use crate::config;
 
 // ─── Dados agregados ─────────────────────────────────────────────────────────
 
@@ -132,17 +131,9 @@ pub(super) fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
         let file_date = chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").ok();
         dates.push(date_str);
 
-        let f = std::fs::File::open(file)?;
-        let lines: Vec<String> = std::io::BufReader::new(f)
-            .lines()
-            .map_while(Result::ok)
-            .filter(|l| !l.trim().is_empty())
-            .collect();
-        for line in lines.iter().rev() {
-            let line = line.as_str();
-
-            match serde_json::from_str::<LogEntry>(line) {
-                Ok(LogEntry::Shell { commands: cmds }) => {
+        for entry in super::read_log_entries(file).into_iter().rev() {
+            match entry {
+                LogEntry::Shell { commands: cmds } => {
                     for cmd in cmds {
                         let cmd = cmd.trim().to_string();
                         if cmd.is_empty() || is_noise_command(&cmd) {
@@ -153,7 +144,7 @@ pub(super) fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
                         }
                     }
                 }
-                Ok(LogEntry::Apps { windows }) => {
+                LogEntry::Apps { windows } => {
                     for w in windows {
                         let w = strip_hostname_prefix(w.trim()).to_string();
                         if !w.is_empty() {
@@ -161,7 +152,7 @@ pub(super) fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
                         }
                     }
                 }
-                Ok(LogEntry::ChromeTabs { tabs: t }) => {
+                LogEntry::ChromeTabs { tabs: t } => {
                     for tab in t {
                         let url = tab.url.trim().to_string();
                         if !url.is_empty() && seen_urls.insert(url.clone()) {
@@ -169,11 +160,11 @@ pub(super) fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
                         }
                     }
                 }
-                Ok(LogEntry::Tag { ts, label }) => {
+                LogEntry::Tag { ts, label } => {
                     let hour = ts.get(11..16).unwrap_or(&ts).to_string();
                     tags.push((hour, label));
                 }
-                Ok(LogEntry::Context { data }) => {
+                LogEntry::Context { data } => {
                     for r in data.git_repos {
                         let incoming: Vec<String> = if !r.commits.is_empty() {
                             r.commits
@@ -199,7 +190,6 @@ pub(super) fn aggregate(files: &[PathBuf]) -> Result<ActivityData> {
                         }
                     }
                 }
-                Err(_) => {}
             }
         }
     }

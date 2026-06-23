@@ -1,11 +1,10 @@
 use anyhow::Result;
 use colored::Colorize;
 use std::collections::HashSet;
-use std::io::BufRead;
 use std::path::PathBuf;
 
-use crate::config;
 use super::{LogEntry, is_noise_command, strip_hostname_prefix};
+use crate::config;
 
 pub fn export_cmd(days: u32, date: Option<&str>, format: &str, output: Option<&str>) -> Result<()> {
     let log_dir = config::log_dir();
@@ -37,15 +36,10 @@ fn export_raw(files: &[PathBuf], format: &str, output: Option<&str>) -> Result<(
             .and_then(|s| s.to_str())
             .unwrap_or("?")
             .to_string();
-        let f = std::fs::File::open(file)?;
         let mut seen: HashSet<String> = HashSet::new();
-        for line in std::io::BufReader::new(f)
-            .lines()
-            .map_while(Result::ok)
-            .filter(|l| !l.trim().is_empty())
-        {
-            match serde_json::from_str::<LogEntry>(&line) {
-                Ok(LogEntry::Shell { commands }) => {
+        for entry in super::read_log_entries(file) {
+            match entry {
+                LogEntry::Shell { commands } => {
                     for cmd in commands {
                         let cmd = cmd.trim().to_string();
                         if cmd.is_empty() || is_noise_command(&cmd) {
@@ -56,7 +50,7 @@ fn export_raw(files: &[PathBuf], format: &str, output: Option<&str>) -> Result<(
                         }
                     }
                 }
-                Ok(LogEntry::Apps { windows }) => {
+                LogEntry::Apps { windows } => {
                     for w in windows {
                         let w = strip_hostname_prefix(w.trim()).to_string();
                         if w.is_empty() {
@@ -67,7 +61,7 @@ fn export_raw(files: &[PathBuf], format: &str, output: Option<&str>) -> Result<(
                         }
                     }
                 }
-                Ok(LogEntry::ChromeTabs { tabs }) => {
+                LogEntry::ChromeTabs { tabs } => {
                     for t in tabs {
                         let url = t.url.trim().to_string();
                         if url.is_empty() {
@@ -83,7 +77,7 @@ fn export_raw(files: &[PathBuf], format: &str, output: Option<&str>) -> Result<(
                         }
                     }
                 }
-                Ok(LogEntry::Context { data }) => {
+                LogEntry::Context { data } => {
                     for r in data.git_repos {
                         let repo = r.repo.clone();
                         let commits: Vec<String> = if !r.commits.is_empty() {
@@ -101,12 +95,11 @@ fn export_raw(files: &[PathBuf], format: &str, output: Option<&str>) -> Result<(
                         }
                     }
                 }
-                Ok(LogEntry::Tag { label, .. }) => {
+                LogEntry::Tag { label, .. } => {
                     if seen.insert(format!("n:{label}")) {
                         rows.push((date_str.clone(), "tag", label));
                     }
                 }
-                Err(_) => {}
             }
         }
     }

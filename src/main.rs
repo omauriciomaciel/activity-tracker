@@ -263,17 +263,24 @@ async fn main() -> Result<()> {
 
         Commands::Collect => {
             let log_dir = config::log_dir();
-            let entry_count = collector::collect_all(&log_dir, &cfg.blocked_patterns, &cfg.ignored_git_paths)?;
+            let entry_count =
+                collector::collect_all(&log_dir, &cfg.blocked_patterns, &cfg.ignored_git_paths)?;
             println!("Coleta concluída — {entry_count} entradas salvas");
         }
 
-        Commands::Tag { label, list, delete, date } => {
+        Commands::Tag {
+            label,
+            list,
+            delete,
+            date,
+        } => {
             let log_dir = config::log_dir();
 
             let target_date = if let Some(ref raw) = date {
                 Some(
-                    chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d")
-                        .with_context(|| format!("Data inválida: '{raw}'. Use YYYY-MM-DD (ex: 2026-08-06)"))?,
+                    chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d").with_context(|| {
+                        format!("Data inválida: '{raw}'. Use YYYY-MM-DD (ex: 2026-08-06)")
+                    })?,
                 )
             } else {
                 None
@@ -287,7 +294,9 @@ async fn main() -> Result<()> {
                         .unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
                     println!("Tag removida em {when}: {lbl}");
                 } else {
-                    eprintln!("Erro: forneça o texto da tag para deletar. Ex: at tag --delete \"reunião\"");
+                    eprintln!(
+                        "Erro: forneça o texto da tag para deletar. Ex: at tag --delete \"reunião\""
+                    );
                     std::process::exit(1);
                 }
             } else if list || label.is_none() {
@@ -315,7 +324,9 @@ async fn main() -> Result<()> {
             let log_dir = config::log_dir();
             let removed = collector::clean_all_logs(&log_dir)?;
             let purged = collector::purge_ignored_git_repos(&log_dir, &cfg.ignored_git_paths)?;
-            println!("Logs limpos — {removed} entradas de data removidas, {purged} repos git ignorados removidos");
+            println!(
+                "Logs limpos — {removed} entradas de data removidas, {purged} repos git ignorados removidos"
+            );
         }
 
         Commands::Update => {
@@ -534,7 +545,9 @@ async fn main() -> Result<()> {
                 println!("Prompt customizado salvo.");
                 println!("  Placeholders disponíveis: {{context}}, {{lang}}");
                 if !template.contains("{context}") {
-                    println!("  Aviso: {{context}} não encontrado — dados serão anexados ao final.");
+                    println!(
+                        "  Aviso: {{context}} não encontrado — dados serão anexados ao final."
+                    );
                 }
             }
             ConfigAction::ClearPrompt => {

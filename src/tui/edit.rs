@@ -1,6 +1,10 @@
 /// Insere char na posição do cursor e avança o cursor.
 pub(super) fn edit_cursor_insert(buf: &mut String, cursor: &mut usize, c: char) {
-    let byte = buf.char_indices().nth(*cursor).map(|(i, _)| i).unwrap_or(buf.len());
+    let byte = buf
+        .char_indices()
+        .nth(*cursor)
+        .map(|(i, _)| i)
+        .unwrap_or(buf.len());
     buf.insert(byte, c);
     *cursor += 1;
 }
@@ -8,7 +12,11 @@ pub(super) fn edit_cursor_insert(buf: &mut String, cursor: &mut usize, c: char) 
 /// Apaga o char antes do cursor (Backspace).
 pub(super) fn edit_cursor_backspace(buf: &mut String, cursor: &mut usize) {
     if *cursor > 0 {
-        let byte = buf.char_indices().nth(*cursor - 1).map(|(i, _)| i).unwrap_or(0);
+        let byte = buf
+            .char_indices()
+            .nth(*cursor - 1)
+            .map(|(i, _)| i)
+            .unwrap_or(0);
         buf.remove(byte);
         *cursor -= 1;
     }
@@ -84,7 +92,9 @@ fn edit_pos_from_line_col(buf: &str, line: usize, col: usize) -> usize {
 /// Move o cursor uma linha acima, mantendo a coluna.
 pub(super) fn edit_cursor_up(buf: &str, cursor: usize) -> usize {
     let (line, col) = edit_line_col(buf, cursor);
-    if line == 0 { return 0; }
+    if line == 0 {
+        return 0;
+    }
     edit_pos_from_line_col(buf, line - 1, col)
 }
 
@@ -92,7 +102,9 @@ pub(super) fn edit_cursor_up(buf: &str, cursor: usize) -> usize {
 pub(super) fn edit_cursor_down(buf: &str, cursor: usize) -> usize {
     let starts = edit_line_starts(buf);
     let (line, col) = edit_line_col(buf, cursor);
-    if line + 1 >= starts.len() { return buf.chars().count(); }
+    if line + 1 >= starts.len() {
+        return buf.chars().count();
+    }
     edit_pos_from_line_col(buf, line + 1, col)
 }
 

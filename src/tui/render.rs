@@ -6,8 +6,8 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Tabs, Wrap},
 };
 
-use super::{ActiveTab, App, SummaryState};
 use super::i18n::Ui;
+use super::{ActiveTab, App, SummaryState};
 
 // ─── Top-level render ─────────────────────────────────────────────────────────
 
@@ -177,8 +177,7 @@ fn render_activities(f: &mut Frame, app: &App, area: Rect) {
     }
 
     if !data.tabs.is_empty() {
-        let mut counts: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
+        let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
         let mut ordered: Vec<String> = Vec::new();
         for (title, url) in &data.tabs {
             let label = if title.is_empty() || title == url {
@@ -293,9 +292,7 @@ fn render_projects(f: &mut Frame, app: &App, area: Rect) {
         "projects.window_30"
     };
     let title = ui.tf("projects.title", &[("label", ui.t(window_key))]);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(title);
+    let block = Block::default().borders(Borders::ALL).title(title);
 
     let stats = match &app.projects {
         None => {
@@ -474,23 +471,38 @@ fn markdown_to_lines(text: &str) -> Vec<Line<'static>> {
             if line.starts_with("### ") {
                 Line::from(Span::styled(
                     line[4..].to_string(),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ))
             } else if line.starts_with("## ") {
                 Line::from(Span::styled(
                     line[3..].to_string(),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 ))
             } else if line.starts_with("# ") {
                 Line::from(Span::styled(
                     line[2..].to_string(),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 ))
-            } else if let Some(rest) = line.strip_prefix("    - ").or_else(|| line.strip_prefix("    * ")) {
-                let mut spans = vec![Span::styled("      ◦ ", Style::default().fg(Color::DarkGray))];
+            } else if let Some(rest) = line
+                .strip_prefix("    - ")
+                .or_else(|| line.strip_prefix("    * "))
+            {
+                let mut spans = vec![Span::styled(
+                    "      ◦ ",
+                    Style::default().fg(Color::DarkGray),
+                )];
                 spans.extend(parse_inline(rest));
                 Line::from(spans)
-            } else if let Some(rest) = line.strip_prefix("  - ").or_else(|| line.strip_prefix("  * ")) {
+            } else if let Some(rest) = line
+                .strip_prefix("  - ")
+                .or_else(|| line.strip_prefix("  * "))
+            {
                 let mut spans = vec![Span::styled("    • ", Style::default().fg(Color::DarkGray))];
                 spans.extend(parse_inline(rest));
                 Line::from(spans)
@@ -537,7 +549,9 @@ pub(super) fn handle_mouse(app: &mut App, mouse: crossterm::event::MouseEvent) {
                 let mut last_started = None;
                 for (i, name) in tab_names.iter().enumerate() {
                     let len = name.chars().count() as u16;
-                    if x >= pos { last_started = Some(i); }
+                    if x >= pos {
+                        last_started = Some(i);
+                    }
                     if x >= pos && x < pos + len {
                         clicked = Some(i);
                         break;

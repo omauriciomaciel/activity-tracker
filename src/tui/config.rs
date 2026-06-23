@@ -1,8 +1,8 @@
-use crate::config::Config;
 use super::{
-    CF_ADD_BLOCK, CF_MACHINE, CF_MODEL, CF_NOTION_PAGE, CF_NOTION_TOKEN, CF_PROMPT,
-    CF_SLACK, CF_URL_OR_KEY,
+    CF_ADD_BLOCK, CF_MACHINE, CF_MODEL, CF_NOTION_PAGE, CF_NOTION_TOKEN, CF_PROMPT, CF_SLACK,
+    CF_URL_OR_KEY,
 };
+use crate::config::Config;
 use crate::summarizer;
 
 pub(super) fn cfg_cycle(current: &mut String, options: &[&str], dir: i32) {
@@ -15,7 +15,11 @@ pub(super) fn cfg_cycle(current: &mut String, options: &[&str], dir: i32) {
     *current = options[new_pos].to_string();
 }
 
-pub(super) fn cfg_initial_value(cfg: &Config, cursor: usize, cf_add_git_path: usize) -> Option<String> {
+pub(super) fn cfg_initial_value(
+    cfg: &Config,
+    cursor: usize,
+    cf_add_git_path: usize,
+) -> Option<String> {
     match cursor {
         CF_MODEL => Some(cfg.model.clone()),
         CF_URL_OR_KEY => Some(if cfg.provider == "ollama" {
@@ -37,9 +41,7 @@ pub(super) fn cfg_initial_value(cfg: &Config, cursor: usize, cf_add_git_path: us
             cfg.blocked_patterns.get(c - CF_ADD_BLOCK - 1).cloned()
         }
         c if c == cf_add_git_path => Some(String::new()),
-        c if c > cf_add_git_path => {
-            cfg.ignored_git_paths.get(c - cf_add_git_path - 1).cloned()
-        }
+        c if c > cf_add_git_path => cfg.ignored_git_paths.get(c - cf_add_git_path - 1).cloned(),
         _ => None,
     }
 }

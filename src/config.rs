@@ -180,18 +180,18 @@ pub fn config_path() -> PathBuf {
     base_dir().join("config.toml")
 }
 
-pub fn log_dir() -> PathBuf {
+pub fn data_dir() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("activity-tracker")
-        .join("logs")
+}
+
+pub fn log_dir() -> PathBuf {
+    data_dir().join("logs")
 }
 
 pub fn summary_dir() -> PathBuf {
-    dirs::data_local_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("activity-tracker")
-        .join("summaries")
+    data_dir().join("summaries")
 }
 
 pub fn summary_path(date: chrono::NaiveDate) -> PathBuf {
