@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.12.1 (2026-06-24)
+
+### Refactoring
+
+- **core**: Simplifica leitura de logs e organiza estrutura de diretórios
+  ([`4a9d5df`](https://github.com/omauriciomaciel/activity-tracker/commit/4a9d5df5d96f050bb569145e9d7cffd1533cdc12))
+
+
 ## v1.12.0 (2026-06-15)
 
 ### Features
