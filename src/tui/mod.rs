@@ -66,6 +66,12 @@ pub(super) enum SummaryState {
     Error(String),
 }
 
+pub(super) enum SendState {
+    Idle,
+    Sending(&'static str),
+    Done(&'static str, Result<String, String>),
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 pub(super) struct App {
@@ -88,6 +94,7 @@ pub(super) struct App {
     pub config_row_map: Vec<usize>,
     pub config_status: Option<String>,
     pub last_size: Rect,
+    pub send_state: SendState,
 }
 
 impl App {
@@ -113,6 +120,14 @@ impl App {
             config_row_map: Vec::new(),
             config_status: None,
             last_size: Rect::default(),
+            send_state: SendState::Idle,
+        }
+    }
+
+    pub fn summary_text(&self) -> Option<&str> {
+        match &self.summary {
+            SummaryState::Cached(t) | SummaryState::Done(t) => Some(t.as_str()),
+            _ => None,
         }
     }
 
@@ -200,7 +215,16 @@ pub async fn run(opts: TuiOptions) -> Result<()> {
     app.load_data();
 
     let (tx, mut rx) = mpsc::channel::<Result<String, String>>(1);
-    let result = event_loop(&mut terminal, &mut app, &tx, &mut rx).await;
+    let (send_tx, mut send_rx) = mpsc::channel::<(&'static str, Result<String, String>)>(1);
+    let result = event_loop(
+        &mut terminal,
+        &mut app,
+        &tx,
+        &mut rx,
+        &send_tx,
+        &mut send_rx,
+    )
+    .await;
 
     disable_raw_mode()?;
     execute!(
@@ -220,6 +244,8 @@ async fn event_loop(
     app: &mut App,
     tx: &mpsc::Sender<Result<String, String>>,
     rx: &mut mpsc::Receiver<Result<String, String>>,
+    send_tx: &mpsc::Sender<(&'static str, Result<String, String>)>,
+    send_rx: &mut mpsc::Receiver<(&'static str, Result<String, String>)>,
 ) -> Result<()> {
     loop {
         terminal.draw(|f| render::render(f, app))?;
@@ -233,6 +259,10 @@ async fn event_loop(
                 }
                 Err(e) => app.summary = SummaryState::Error(e),
             }
+        }
+
+        if let Ok((target, result)) = send_rx.try_recv() {
+            app.send_state = SendState::Done(target, result);
         }
 
         if event::poll(Duration::from_millis(100))? {
@@ -545,6 +575,82 @@ async fn event_loop(
                                     .map_err(|e| e.to_string());
                                     let _ = tx.send(res).await;
                                 });
+                            }
+                        }
+
+                        KeyCode::Char('n') if app.active_tab == ActiveTab::Summary => {
+                            if !matches!(app.send_state, SendState::Sending(_)) {
+                                if let Some(text) = app.summary_text().map(|s| s.to_string()) {
+                                    match (
+                                        app.config.notion_token.clone(),
+                                        app.config.notion_page_id.clone(),
+                                    ) {
+                                        (Some(token), Some(page_id)) => {
+                                            let title = format!(
+                                                "{} — {}",
+                                                app.date.format("%Y-%m-%d"),
+                                                app.config.get_machine_name()
+                                            );
+                                            let tx = send_tx.clone();
+                                            app.send_state = SendState::Sending("Notion");
+                                            tokio::spawn(async move {
+                                                let res = crate::notion::send_page(
+                                                    &token, &page_id, &title, &text,
+                                                )
+                                                .await
+                                                .map_err(|e| e.to_string());
+                                                let _ = tx.send(("Notion", res)).await;
+                                            });
+                                        }
+                                        _ => {
+                                            let ui = i18n::Ui::new(&app.config.lang);
+                                            app.send_state = SendState::Done(
+                                                "Notion",
+                                                Err(ui.tf(
+                                                    "summary.not_configured",
+                                                    &[("target", "Notion")],
+                                                )),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        KeyCode::Char('s') if app.active_tab == ActiveTab::Summary => {
+                            if !matches!(app.send_state, SendState::Sending(_)) {
+                                if let Some(text) = app.summary_text().map(|s| s.to_string()) {
+                                    match app.config.slack_webhook.clone() {
+                                        Some(webhook) => {
+                                            let title = format!(
+                                                "{} — {}",
+                                                app.date.format("%Y-%m-%d"),
+                                                app.config.get_machine_name()
+                                            );
+                                            let tx = send_tx.clone();
+                                            app.send_state = SendState::Sending("Slack");
+                                            tokio::spawn(async move {
+                                                let res = crate::slack::send_message(
+                                                    &webhook, &title, &text,
+                                                )
+                                                .await
+                                                .map(|_| String::new())
+                                                .map_err(|e| e.to_string());
+                                                let _ = tx.send(("Slack", res)).await;
+                                            });
+                                        }
+                                        None => {
+                                            let ui = i18n::Ui::new(&app.config.lang);
+                                            app.send_state = SendState::Done(
+                                                "Slack",
+                                                Err(ui.tf(
+                                                    "summary.not_configured",
+                                                    &[("target", "Slack")],
+                                                )),
+                                            );
+                                        }
+                                    }
+                                }
                             }
                         }
                         _ => {}

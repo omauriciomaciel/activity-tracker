@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::i18n::Ui;
-use super::{ActiveTab, App, SummaryState};
+use super::{ActiveTab, App, SendState, SummaryState};
 
 // ─── Top-level render ─────────────────────────────────────────────────────────
 
@@ -105,6 +105,18 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 ui.t("hint.config_browse").to_string()
             }
+        }
+        ActiveTab::Summary => {
+            let send_hint = if app.summary_text().is_some() {
+                format!("  {}  {}", ui.t("hint.send_notion"), ui.t("hint.send_slack"))
+            } else {
+                String::new()
+            };
+            format!(
+                " {nav}  {}  ↑↓/jk scroll  {r_hint}{send_hint}  {} ",
+                ui.t("hint.tab"),
+                ui.t("hint.quit"),
+            )
         }
         _ => format!(
             " {nav}  {}  ↑↓/jk scroll  {r_hint}  {} ",
@@ -401,13 +413,16 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(p, area);
         }
         SummaryState::Cached(text) => {
-            let block = Block::default()
+            let mut block = Block::default()
                 .borders(Borders::ALL)
                 .title(ui.t("block.summary"))
                 .title_bottom(Span::styled(
                     ui.t("summary.saved_hint"),
                     Style::default().fg(Color::DarkGray),
                 ));
+            if let Some(status) = send_status_line(app, &ui) {
+                block = block.title_bottom(status);
+            }
             let p = Paragraph::new(markdown_to_lines(text))
                 .block(block)
                 .scroll((app.scroll, 0))
@@ -415,9 +430,12 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(p, area);
         }
         SummaryState::Done(text) => {
-            let block = Block::default()
+            let mut block = Block::default()
                 .borders(Borders::ALL)
                 .title(ui.t("block.summary"));
+            if let Some(status) = send_status_line(app, &ui) {
+                block = block.title_bottom(status);
+            }
             let p = Paragraph::new(markdown_to_lines(text))
                 .block(block)
                 .scroll((app.scroll, 0))
@@ -434,6 +452,25 @@ fn render_summary(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(p, area);
         }
     }
+}
+
+fn send_status_line<'a>(app: &'a App, ui: &Ui) -> Option<Line<'a>> {
+    let (text, color) = match &app.send_state {
+        SendState::Idle => return None,
+        SendState::Sending(target) => (
+            ui.tf("summary.sending", &[("target", target)]),
+            Color::Cyan,
+        ),
+        SendState::Done(target, Ok(_)) => (
+            ui.tf("summary.sent_ok", &[("target", target)]),
+            Color::Green,
+        ),
+        SendState::Done(target, Err(e)) => (
+            ui.tf("summary.sent_err", &[("target", target), ("e", e)]),
+            Color::Red,
+        ),
+    };
+    Some(Line::from(Span::styled(text, Style::default().fg(color))).alignment(Alignment::Right))
 }
 
 // ─── Markdown → Ratatui ───────────────────────────────────────────────────────
