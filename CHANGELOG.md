@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.13.0 (2026-07-29)
+
+### Features
+
+- **tui**: Adiciona integração de envio de resumo para Notion e Slack
+  ([`48d2689`](https://github.com/omauriciomaciel/activity-tracker/commit/48d26899d0704c1202109fc50b460d078145bebf))
+
+
 ## v1.12.1 (2026-06-24)
 
 ### Refactoring
