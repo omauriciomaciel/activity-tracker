@@ -22,3 +22,6 @@ target
 
 
 .serena/
+
+# MacOS
+.DS_Store

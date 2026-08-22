@@ -3,7 +3,12 @@ name = "activity-tracker"
 version = "1.13.0"
 edition = "2024"
 description = "Captura atividades do sistema e resume com Ollama"
+license = "MIT"
 repository = "https://github.com/omauriciomaciel/activity-tracker"
+homepage = "https://github.com/omauriciomaciel/activity-tracker"
+readme = "README.md"
+keywords = ["activity", "tracker", "ollama", "productivity", "cli"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
