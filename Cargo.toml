@@ -9,6 +9,14 @@ homepage = "https://github.com/omauriciomaciel/activity-tracker"
 readme = "README.md"
 keywords = ["activity", "tracker", "ollama", "productivity", "cli"]
 categories = ["command-line-utilities"]
+exclude = [
+    ".github/",
+    ".gitignore",
+    "docs/",
+    "install.sh",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
